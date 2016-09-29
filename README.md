@@ -1,105 +1,49 @@
-CapMyFreeCamsNodeJS (CapMFCNodeJS) (`mfc-node` with a better name and `readme.md`!)
+mfc_cb.node
 ==========
-
-https://gitlab.com/pusspounder (All of my work)
-
-https://github.com/pusspounder (Some of my work that requires GitHub)
 
 ### Credit ###
 
-This is a fork of [mfc-node](https://github.com/sstativa/mfc-node), just with a better name, better `readme.md` and `FFMPEG.exe` included!
-
-`mfc-node` is based on [capturbate-node](https://github.com/SN4T14/capturebate-node).
-
+This is a fork of [CapMyFreeCamsNodeJS](https://github.com/pusspounder/CapMyFreeCamsNodeJS) which is a fork of [mfc-node](https://github.com/sstativa/mfc-node), which is a fork of [capturbate-node](https://github.com/SN4T14/capturebate-node).
 
 ### About ###
 
-CapMyFreeCamsNodeJS will automatically record MyFreeCams.com streams.
+mfc_cb.node will automatically record either MyFreeCams.com or Chaturbate.com streams.
 
-CapMFCNodeJS is a Node.JS application that should run on all platforms that can run Node.JS, e.g. Windows, Linux, Mac.
+This is a Node.JS application, so it works anywhere that Node.JS does.
 
-**The following instructions are for *Windows* only!**
+mfc_cb.node reintegrates the Chaturbate support of the original capturbate-node, however capturbate-node uses an account login mechanism and rtmpdump to record.  mfc_cb.node does not login to your Chaturbate account and uses ffmpeg to record.
+
+The primary feature enhancements over the parent repositories are:
+
+* Automatic conversion from ts containers to either mp4 or mkv.  No need to run batch files.
+
+* SIGINT handler so that it can be cleanly shut down and all post-process conversion steps completed for interrupted recordings.
+
+* Ability to control output colors from config.yml (useful if you like dark themes, and blue is hard to read)
+
+* Ability to control date/time/hour/minute/second format for the video file names and also to include the name of the site in the file name.
 
 Setup
 ==========
 
-* [Node.JS](https://nodejs.org/download/)
-  >Basically you need to have `node.exe` and `npm.cmd` in your `PATH`. I recommend using `Cmder`, downloading `node-v6.4.0-win-x64.zip` and putting it in your `PATH`. You don't even have to *"install"* anything, it's portable.
+* Dependencies: Install Node.JS, NPM, and ffmpeg
 
-* `FFMPEG.exe`
-  >Included!
-
-* CapMyFreeCamsNodeJS
+* Install mfc_cb.node
   >On GitHub, click `Clone or download`, `Download ZIP`.
+  >Or run `git clone https://github.com/jrudess/mfc_cb.node.git`
 
-* Via `Command Prompt` or `Cmder`
-    > cd CapMyFreeCamsNodeJS # change to the package directory
+* Run `npm install` to fetch all of the package dependences listed in package.json.
 
-    > npm install # install package
-
-Config
+Instructions
 ===========
 
-Sample `config.yml`:
+Refer to `config.yml`.
 
-```
-# Folder for streams in progress.
-captureDirectory: 'capturing'
+* MFC models are stored in `config.yml` using their MFC profile ID.  This allows mfc_cb.node to track the model across name changes.  To see or get this value manually, load the models profile page, right click and choose 'View Source', then search for nProfileID.
 
-# Folder for finished streams.
-completeDirectory: 'captured'
+* Chaturbate models are only stored with their model name.
 
-# How often to check for new models in seconds.
-modelScanInterval: 300
+* Models can be added or removed by placing them into the appropriate section of `settings.yml`.  This file will get processed based on the `modelScanInterval` setting in `config.yml`.  When added to `settings.yml`, the model will be placed into the corresponding entry in `config.yml` and once the model has been seen online they will be added to the main record list. Because `config.yml` gets rewritten during this process, any manual edits you make to config.yml will be lost.  It is not recommended to manually add models to config.yml while the program is running, but instead to add them to `settings.yml`.
 
-debug: true
+* To run: `node main.js`
 
-# MyFreeCams Model ID.
-# To get Model ID, go to model's profile, "View Page Source", search for "nProfileUserId". In Chrome/Chromium "view-source:http://profiles.myfreecams.com/target"
-models:
-- 20249367 # KatyaFods
-- 17030607 # oKRYSTALo
-- 10272360 # XViciousLoveX
-- 14554856 # NicolettXXX
-- 15406039 # StunningAna
-- 16915028 # AriannaSecret
-- 2530502 # AdorableKye
-- 5526194 # KATEELIFE
-- 8339561 # kannalol
-- 8450555 # AlisOnFire
-- 9759444 # Geniva_
-- 9798847 # B_E_L_L_E_
-- 20346887 # BaeGotBooty
-- 10876762 # JadineIsNasty
-- 15042071 # Tat2peach
-- 21090122 # Cutekitty747
-- 11549213 # Jayde_Phoenix
-- 21578748 # Lolasays
-- 21948600 # TwerkAndChill
-
-# The next time the model comes online, her Model ID will be ADDED to "models" above.
-includeModels:
-  - MODELNAMETOSTARTCAPTURING
-
-# The next time the model comes online, her Model ID will be REMOVED from "models"
-excludeModels:
-  - MODELNAMETOSTOPCAPTURING
-```
-**NOTE:** `config.yml` is read only once, at start. If you want to add or remove a model while the package is running, use `updates.yml`.
-
-Run
-===========
-
-Via `Command Prompt` or `Cmder` (recommended):
-
-```
-  cd CapMyFreeCamsNodeJS # change to the package directory
-  node main.js # run package
-```
-
-Convert *.TS files to *.MKV
-===========
-
-Run `runConvert.bat`.
-
-**NOTE:** `runConvert.bat` will delete all `*.TS` files under 50 MB. You can adjust this number in `mainconvert.bat`
