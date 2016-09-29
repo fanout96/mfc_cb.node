@@ -731,6 +731,8 @@ var config = yaml.safeLoad(fs.readFileSync('config.yml', 'utf8'));
 config.captureDirectory = path.resolve(config.captureDirectory);
 config.completeDirectory = path.resolve(config.completeDirectory);
 
+initColors();
+
 mkdirp(config.captureDirectory, function(err) {
   if (err) {
     printErrorMsg('', err);
@@ -776,6 +778,5 @@ process.on('SIGINT', function() {
   }
 })
 
-initColors();
 mainMfcLoop();
 mainCbLoop();

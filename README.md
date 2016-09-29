@@ -26,11 +26,11 @@ The primary feature enhancements over the parent repositories are:
 Setup
 ==========
 
-* `Dependencies`: Install Node.JS, NPM, and ffmpeg
+* Dependencies: Install Node.JS, NPM, and ffmpeg
 
 * Install mfc_cb.node
   >On GitHub, click `Clone or download`, `Download ZIP`.
-  >Or git clone https://github.com/jrudess/mfc_cb.node.git
+  >Or run `git clone https://github.com/jrudess/mfc_cb.node.git`
 
 * Run `npm install` to fetch all of the package dependences listed in package.json.
 
@@ -39,11 +39,11 @@ Instructions
 
 Refer to `config.yml`.
 
-* MFC models are stored in config.yml using their MFC profile ID.  This allows mfc_cb.node to track the model across name changes.  To see or get this value manually, right click in your browser and select 'View Source', then search for nProfileID.
+* MFC models are stored in `config.yml` using their MFC profile ID.  This allows mfc_cb.node to track the model across name changes.  To see or get this value manually, load the models profile page, right click and choose 'View Source', then search for nProfileID.
 
 * Chaturbate models are only stored with their model name.
 
-* Models can be added or removed by placing them into the appropriate section of `settings.yml`.  This file will get scanned based on the `modelScanInterval` setting in `config.yml`.  When a model is added to `ssettings.yml`, she will be placed in a pending queue in `config.yml` and once the mdel is online she will be added to the active record list.  Because `config.yml` gets rewritten during this process, any manual edits you make to config.yml will be lost.  It is not recommended to manually add models to config.yml while the program is running.
+* Models can be added or removed by placing them into the appropriate section of `settings.yml`.  This file will get processed based on the `modelScanInterval` setting in `config.yml`.  When added to `settings.yml`, the model will be placed into the corresponding entry in `config.yml` and once the model has been seen online they will be added to the main record list. Because `config.yml` gets rewritten during this process, any manual edits you make to config.yml will be lost.  It is not recommended to manually add models to config.yml while the program is running, but instead to add them to `settings.yml`.
 
 * To run: `node main.js`
 
