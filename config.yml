@@ -10,6 +10,8 @@ sitecolor: green
 debugcolor: yellow
 errorcolor: red
 includeSiteInFile: true
+enableMFC: true
+enableCB: true
 mfcmodels:
   - 5479250  # ItalianBoobs
   - 20249367 # KatyaFods

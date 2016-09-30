@@ -750,7 +750,7 @@ mkdirp(config.completeDirectory, function(err) {
 function tryExit() {
   // SIGINT will get passed to any running ffmpeg captures.
   // Must delay exiting until the capture and postProcess
-  // for all models has finished.  Keep checking every 1s
+  // for all models have finished.  Keep checking every 1s
   if (semaphore == 0 && mfcFilesCurrentlyCapturing.length == 0 && cbFilesCurrentlyCapturing.length == 0) {
     process.stdout.write('\n');
     process.exit(0);
@@ -778,5 +778,11 @@ process.on('SIGINT', function() {
   }
 })
 
-mainMfcLoop();
-mainCbLoop();
+if (config.enableMFC) {
+  mainMfcLoop();
+}
+
+if (config.enableCB) {
+  mainCbLoop();
+}
+
