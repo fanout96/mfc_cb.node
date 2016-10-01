@@ -21,7 +21,7 @@ The primary feature enhancements over the parent repositories are:
 
 * Ability to control output colors from config.yml (useful if you like dark themes, and blue is hard to read)
 
-* Ability to control date/time/hour/minute/second format for the video file names and also to include the name of the site in the file name.
+* Ability to control date and time format for file names and also whether to include the name of the site.
 
 Setup
 ==========
@@ -39,11 +39,14 @@ Instructions
 
 Refer to `config.yml`.
 
-* MFC models are stored in `config.yml` using their MFC profile ID.  This allows mfc_cb.node to track the model across name changes.  To see or get this value manually, load the models profile page, right click and choose 'View Source', then search for nProfileID.
+* MFC models are stored in `config.yml` using their MFC profile ID.  This allows mfc_cb.node to track the model across name changes.  To find the profile ID manually, load the models profile page, right click and choose 'View Source', then search for nProfileUserID.
 
 * Chaturbate models are only stored with their model name.
+
+* NOTE: In all cases, model names are currently case sensitive.  If captures are not starting, double check whether you have the correct case for all characters.
 
 * Models can be added or removed by placing them into the appropriate section of `updates.yml`.  This file will get processed based on the `modelScanInterval` setting in `config.yml`.  When added to `updates.yml`, the model will be placed into the corresponding entry in `config.yml` and once the model has been seen online they will be added to the main record list. Because `config.yml` gets rewritten during this process, any manual edits you make to `config.yml` will be lost.  It is not recommended to manually add models to `config.yml` while the program is running, but instead to add them to `updates.yml`.
 
 * To run: `node main.js`
+* To run without color: `node main.js --no-color`
 
