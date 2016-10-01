@@ -166,39 +166,53 @@ function selectMfcMyModels(onlineModels) {
         fs.writeFileSync('updates.yml', yaml.safeDump(updates), 0, 'utf8');
       }
     }
+  }).then(function(dirty) {
 
-    config.includeMfcModels = _.reject(config.includeMfcModels, function(nm) {
-      // if the requsted model is online, store her UID in the recording list
-      // and remove from includeMfcModels
-      for (var i = 0; i < onlineModels.length; i++) {
-        if (onlineModels[i].nm == nm) {
-          printMsg('MFC', colors.model(nm) + colors.italic(' added') + ' to capture list');
-          config.mfcmodels.push(onlineModels[i].uid);
+    // Fetch the UID of all models to be included.
+    // The model does not have to be online for this.
+    var queries = [];
+    for (var i = 0; i < config.includeMfcModels.length; i++) {
+      var query = mfcGuest.queryUser(config.includeMfcModels[i]).then((model) => {
+        var index = config.mfcmodels.indexOf(model.uid);
+        if (index === -1) {
+            printMsg('MFC', colors.model(model.nm) + colors.italic(' added') + ' to capture list');
+            config.mfcmodels.push(model.uid);
+            config.includeMfcModels = _.without(config.includeMfcModels, model.nm);
           dirty = true;
-          return true;
+        } else {
+          printMsg('MFC', colors.model(model.nm) + ' is already in the capture list');
         }
-      }
-      return false;
-    });
+      });
+      queries.push(query);
+    }
 
-    config.excludeMfcModels = _.reject(config.excludeMfcModels, function(nm) {
-      // if we managed to find id of the model in the collection of online models
-      // we remove her id in models and remove her from excludeMfcModels
-      for (var i = 0; i < onlineModels.length; i++) {
-        if (onlineModels[i].nm == nm) {
-          var capIndex = mfcModelsCurrentlyCapturing.indexOf(onlineModels[i].uid);
-          if (capIndex !== -1) {
-            printMsg('MFC', colors.model(nm) + colors.italic(' removed') + ' from capture list, but is still currently capturing.');
-          } else {
-            printMsg('MFC', colors.model(nm) + colors.italic(' removed') + ' from capture list.');
-          }
-          config.mfcmodels = _.without(config.mfcmodels, onlineModels[i].uid);
-          dirty = true;
-          return true;
+    return Promise.all(queries).then(function() {
+      config.includeMfcModels = [];
+      return dirty;
+    });
+  }).then(function(dirty) {
+    // Fetch the UID of all models to be excluded.
+    // The model does not have to be online for this
+    var queries = [];
+    for (var i = 0; i < config.excludeMfcModels.length; i++) {
+      var query = mfcGuest.queryUser(config.excludeMfcModels[i]).then((model) => {
+        var capIndex = mfcModelsCurrentlyCapturing.indexOf(model.uid);
+        if (capIndex !== -1) {
+          printMsg('MFC', colors.model(nm) + colors.italic(' removed') + ' from capture list, but is still currently capturing.');
+        } else {
+          printMsg('MFC', colors.model(nm) + colors.italic(' removed') + ' from capture list.');
         }
-      }
-    });
+        config.mfcmodels = _.without(config.mfcmodels, model.uid);
+        dirty = true;
+      });
+      queries.push(query);
+    }
 
+    return Promise.all(queries).then(function() {
+      config.excludeMfcModels = [];
+      return dirty;
+    });
+  }).then(function(dirty) {
     if (dirty) {
       fs.writeFileSync('config.yml', yaml.safeDump(config), 0, 'utf8');
     }
