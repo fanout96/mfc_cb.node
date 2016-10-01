@@ -1,7 +1,8 @@
-captureDirectory: 'capturing'
-completeDirectory: 'captured'
-modelScanInterval: 300
-autoConvertType: mp4  # also mkv or none (leaves as ts)
+captureDirectory: capturing
+completeDirectory: captured
+modelScanInterval: 350
+autoConvertType: mp4 # also mkv or none to leave as ts
+autoDelete: false # warning: setting to true will delete captures
 dateFormat: YYYYMMDD-HHmmss
 debug: true
 modelcolor: magenta
@@ -13,17 +14,16 @@ includeSiteInFile: true
 enableMFC: true
 enableCB: true
 mfcmodels:
-  - 5479250  # ItalianBoobs
-  - 20249367 # KatyaFods
-  - 17030607 # oKRYSTALo
+  - 3623822  # LaceyBlack
+  - 12513225 # CodiLake
 cbmodels:
-  - sexxylorry
-  - sophieandkaiden
+  - aynmarie
+  - theemilygrey
 includeMfcModels:
-  - MODELNAMETOSTARTCAPTURING
+  - MODELNAMETOSSTARTCAPTURING
 excludeMfcModels:
   - MODELNAMETOSTOPCAPTURING
 includeCbModels:
   - MODELNAMETOSTARTCAPTURING
-excludeMfcModels:
+excludeCbModels:
   - MODELNAMETOSTOPCAPTURING

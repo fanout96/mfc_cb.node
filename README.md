@@ -43,6 +43,8 @@ Refer to `config.yml`.
 
 * Chaturbate models are only stored with their model name.
 
+* NOTE: In all cases, model names are currently case sensitive.  If captures are not starting, double check whether you have the correct case for all characters.
+
 * Models can be added or removed by placing them into the appropriate section of `updates.yml`.  This file will get processed based on the `modelScanInterval` setting in `config.yml`.  When added to `updates.yml`, the model will be placed into the corresponding entry in `config.yml` and once the model has been seen online they will be added to the main record list. Because `config.yml` gets rewritten during this process, any manual edits you make to `config.yml` will be lost.  It is not recommended to manually add models to `config.yml` while the program is running, but instead to add them to `updates.yml`.
 
 * To run: `node main.js`
