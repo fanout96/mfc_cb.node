@@ -19,11 +19,3 @@ mfcmodels:
 cbmodels:
   - aynmarie
   - theemilygrey
-includeMfcModels:
-  - MODELNAMETOSSTARTCAPTURING
-excludeMfcModels:
-  - MODELNAMETOSTOPCAPTURING
-includeCbModels:
-  - MODELNAMETOSTARTCAPTURING
-excludeCbModels:
-  - MODELNAMETOSTOPCAPTURING
