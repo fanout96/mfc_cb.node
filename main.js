@@ -144,33 +144,31 @@ function selectMfcMyModels(onlineModels) {
         updates.excludeMfcModels = [];
       }
 
+      var bundle = {includeMfcModels: includeMfcModels, excludeMfcModels: excludeMfcModels, dirty: false};
+
       // first we push changes to main config
       if (updates.includeMfcModels.length > 0) {
         printMsg('MFC', updates.includeMfcModels.length + ' model(s) to include');
-
         includeMfcModels = updates.includeMfcModels;
+        updates.includeMfcModels = [];
       }
 
       if (updates.excludeMfcModels.length > 0) {
         printMsg('MFC', updates.excludeMfcModels.length + ' model(s) to exclude');
-
         excludeMfcModels = updates.excludeMfcModels;
+        updates.excludeMfcModels = [];
       }
 
       // if there were some updates, then we reset updates.yml
       if (includeMfcModels.length > 0 || excludeMfcModels.length > 0) {
-        updates.includeMfcModels = [];
-        updates.excludeMfcModels = [];
-
         fs.writeFileSync('updates.yml', yaml.safeDump(updates), 0, 'utf8');
       }
     }
 
-    var bundle = {includeMfcModels: includeMfcModels, excludeMfcModels: excludeMfcModels, dirty: false};
     return bundle;
   }).then(function(bundle) {
 
-    // Fetch the UID of all models to add to capture list.
+    // Fetch the UID of new models to add to capture list.
     // The model does not have to be online for this.
     var queries = [];
     for (var i = 0; i < bundle.includeMfcModels.length; i++) {
@@ -191,8 +189,8 @@ function selectMfcMyModels(onlineModels) {
       return bundle;
     });
   }).then(function(bundle) {
-    // Fetch the UID of all models to be excluded.
-    // The model does not have to be online for this
+    // Fetch the UID of current models to be excluded from capture list.
+    // The model does not have to be online for this.
     var queries = [];
     for (var i = 0; i < bundle.excludeMfcModels.length; i++) {
       var query = mfcGuest.queryUser(bundle.excludeMfcModels[i]).then((model) => {
@@ -284,14 +282,12 @@ function selectCbMyModels(onlineModels) {
       // first we push changes to main config
       if (updates.includeCbModels.length > 0) {
         printMsg('CB ', updates.includeCbModels.length + ' model(s) to include');
-
         includeCbModels = updates.includeCbModels;
         updates.includeCbModels = [];
       }
 
       if (updates.excludeCbModels.length > 0) {
         printMsg('CB ', updates.excludeCbModels.length + ' model(s) to exclude');
-
         excludeCbModels = updates.excludeCbModels;
         updates.excludeCbModels = [];
       }
@@ -386,6 +382,12 @@ function createMfcCaptureProcess(model) {
       'fatal',
       '-i',
       'http://video' + (model.u.camserv - 500) + '.myfreecams.com:1935/NxServer/ngrp:mfc_' + (100000000 + model.uid) + '.f4v_mobile/playlist.m3u8',
+      // TODO: Some models get AV sync issues after a long time of recording.
+      //       Will experiment with a per-model option to enable ffmpeg audio
+      //       resampling to try and correct for sync issues.
+      //'-af',
+      //'aresample=async=1',
+      //'-vcodec',
       '-c',
       'copy',
       config.captureDirectory + '/' + filename + '.ts'
@@ -394,11 +396,15 @@ function createMfcCaptureProcess(model) {
     var captureProcess = childProcess.spawn('ffmpeg', spawnArguments);
 
     captureProcess.stdout.on('data', function(data) {
-      printMsg('MFC', data.toString);
+      printMsg('MFC', data);
     });
 
     captureProcess.stderr.on('data', function(data) {
-      printMsg('MFC', data.toString);
+      printMsg('MFC', data);
+    });
+
+    captureProcess.on('error', function(err) {
+      printDebugMsg('MFC', err);
     });
 
     captureProcess.on('close', function(code) {
@@ -518,6 +524,10 @@ function createCbCaptureProcess(modelName) {
       printMsg('CB ', data.toString);
     });
 
+    captureProcess.on('error', function(err) {
+      printDebugMsg('CB ', err);
+    });
+
     captureProcess.on('close', function(code) {
       if (tryingToExit) {
         process.stdout.write(colors.site('CB ') + ' ' + colors.model(commandArguments.modelName) + ' capture interrupted\n' + colors.time('[' + getCurrentDateTime() + '] '));
@@ -633,6 +643,10 @@ function postProcess(filename) {
       fs.unlink(config.completeDirectory + '/' + filename + '.' + config.autoConvertType);
     }
     semaphore--; // release semaphore only when ffmpeg process has ended
+  });
+
+  myCompleteProcess.on('error', function(err) {
+    printErrorMsg('', err);
   });
 }
 
@@ -755,6 +769,8 @@ if (config.enableMFC) {
     return mfcGuest.connectAndWaitForModels();
   }).then(function() {
     mainMfcLoop();
+  }).catch(function(err) {
+    printErrorMsg('MFC', err);
   });
 }
 
