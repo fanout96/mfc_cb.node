@@ -144,8 +144,6 @@ function selectMfcMyModels(onlineModels) {
         updates.excludeMfcModels = [];
       }
 
-      var bundle = {includeMfcModels: includeMfcModels, excludeMfcModels: excludeMfcModels, dirty: false};
-
       // first we push changes to main config
       if (updates.includeMfcModels.length > 0) {
         printMsg('MFC', updates.includeMfcModels.length + ' model(s) to include');
@@ -165,6 +163,7 @@ function selectMfcMyModels(onlineModels) {
       }
     }
 
+    var bundle = {includeMfcModels: includeMfcModels, excludeMfcModels: excludeMfcModels, dirty: false};
     return bundle;
   }).then(function(bundle) {
 
