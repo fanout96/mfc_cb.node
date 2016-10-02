@@ -20,6 +20,7 @@ var session = bhttp.session();
 
 var MFC = 'MFC'; // MyFreeCams
 var CB  = 'CB '; // Chaturbate
+var IF  = 'IF '; // iFriends
 
 function getCurrentDateTime() {
   return moment().format(config.dateFormat);
@@ -70,6 +71,7 @@ function getOnlineModels(site) {
   switch (site) {
     case MFC: return getMfcOnlineModels(); break;
     case CB:  return getCbOnlineModels(1); break;
+    case IF:  return getIfOnlineModels(1); break;
     default:  printErrorMsg(site, 'getOnlineModels: unhandled site ' + site); break;
   }
   return;
@@ -78,7 +80,6 @@ function getOnlineModels(site) {
 function getMfcOnlineModels() {
   return Promise.try(function() {
     var onlineModels = mfc.Model.findModels((m) => true);
-    printMsg(MFC, onlineModels.length  + ' model(s) online');
     return onlineModels;
   })
   .catch(function(err) {
@@ -89,7 +90,7 @@ function getMfcOnlineModels() {
 function getCbOnlineModels(page) {
 
   return Promise.try(function() {
-    return session.get("https://chaturbate.com/followed-cams/?page=" + page);
+    return session.get('https://chaturbate.com/followed-cams/?page=' + page);
   }).then(function (response) {
 
     var $ = cheerio.load(response.body);
@@ -115,6 +116,8 @@ function getCbOnlineModels(page) {
     .get();
     var totalPages = pages[pages.length-1];
 
+    //printDebugMsg(CB, 'Fetching page ' + page + '/' + totalPages);
+
     // Recurse until models on all pages are loaded
     if (page < totalPages) {
       return getCbOnlineModels(page+1)
@@ -131,6 +134,54 @@ function getCbOnlineModels(page) {
   .catch(function(err) {
     printErrorMsg(CB, err.toString());
   });
+}
+
+function getIfOnlineModels(page) {
+  return Promise.try(function() {
+    return session.get('http://www.ifriends.net/userurl_membrg2/livehosts/all-cam-girls/live-now/?pLoopPageOffset=' + page + '&p_ckname_liveBrowse=list');
+  }).then(function (response) {
+    var $ = cheerio.load(response.body);
+
+    // Get an array of models found on this page
+    var currentModels = $(".lb-tablerow-content")
+    .map(function() {
+      return $(this).find('b').text().split(',');
+    })
+    .get();
+    //printDebugMsg(IF, 'currentModels = ' + currentModels);
+
+    // Get the total number of pages to load
+    var scripts = $('script')
+    .map(function(){
+      return $(this).text();
+    }).get().join('');
+
+    var pages = scripts.match(/(pager-last.*[\s\S].*appendOrReplaceURLParameter.*pLoopPageOffset.*(0|[1-9][0-9]))/i);
+    if (pages == null) {
+      return currentModels;
+    } else {
+      var totalPages = pages[pages.length-1];
+
+      //printDebugMsg(IF, 'Fetching page ' + page + '/' + totalPages);
+
+      // Recurse until models on all pages are loaded
+      if (page < totalPages) {
+        return getIfOnlineModels(page+1)
+        .then(function(models) {
+          return currentModels.concat(models);
+        })
+        .catch(function(err) {
+          printErrorMsg(IF, err);
+        })
+      } else {
+        return currentModels;
+      }
+    }
+  })
+  .catch(function(err) {
+    printDebugMsg(IF, err);
+  });
+  return;
 }
 
 function selectMyModels(site, onlineModels) {
@@ -161,6 +212,7 @@ function processUpdates(site) {
   switch (site) {
     case MFC: len = config.mfcmodels.length; break;
     case CB:  len = config.cbmodels.length;  break;
+    case IF:  len = config.ifmodels.length;  break;
   }
   printDebugMsg(site, len + ' model(s) in config');
 
@@ -208,6 +260,25 @@ function processUpdates(site) {
           updates.excludeMfcModels = [];
         }
         break;
+
+      case IF:
+        if (!updates.includeIfModels) {
+          updates.includeIfModels = [];
+        } else if (updates.includeIfModels.length > 0) {
+          printMsg(CB, updates.includeIfModels.length + ' model(s) to include');
+          includeModels = updates.includeIfModels;
+          updates.includeIfModels = [];
+        }
+
+        if (!updates.excludeIfModels) {
+          updates.excludeIfModels = [];
+        } else if (updates.excludeMfcModels.length > 0) {
+          printMsg(site, updates.excludeMfcModels.length + ' model(s) to exclude');
+          excludeModels = updates.excludeMfcModels;
+          updates.excludeMfcModels = [];
+        }
+
+        break;
     }
 
     // if there were some updates, then rewrite updates.yml
@@ -225,14 +296,9 @@ function addModel(site, model) {
   var nm;
 
   switch (site) {
-    case MFC:
-      index = config.mfcmodels.indexOf(model.uid);
-      nm = model.nm
-      break;
-    case CB:
-      index = config.cbmodels.indexOf(model);
-      nm = model;
-      break;
+    case MFC: index = config.mfcmodels.indexOf(model.uid); nm = model.nm; break;
+    case CB:  index = config.cbmodels.indexOf(model);      nm = model;    break;
+    case IF:  index = config.ifmodels.indexOf(model);      nm = model;    break;
   }
 
   if (index === -1) {
@@ -241,6 +307,7 @@ function addModel(site, model) {
     switch (site) {
       case MFC: config.mfcmodels.push(model.uid); break;
       case CB:  config.cbmodels.push(name);       break;
+      case IF:  config.ifmodels.push(name);       break;
     }
 
     return true;
@@ -271,6 +338,7 @@ function addModels(site, bundle) {
       break;
 
     case CB:
+    case IF:
       for (var i = 0; i < bundle.includeModels.length; i++) {
         var nm = bundle.includeModels[i];
         bundle.dirty |= addModel(site, nm);
@@ -286,16 +354,12 @@ function removeModel(site, model) {
   var nm;
 
   switch (site) {
-    case MFC:
-      index = mfcModelsCurrentlyCapturing.indexOf(model.uid);
-      nm = model.nm;
-    case CB:
-      index = cbCurentlyCapturing.indexOf(model);
-      nm = model;
-      break;
+    case MFC: index = mfcModelsCurrentlyCapturing.indexOf(model.uid); nm = model.nm; break;
+    case CB:  index = cbModelsCurrentlyCapturing.indexOf(model);      nm = model;    break;
+    case IF:  index = ifModelsCurrentlyCapturing.indexOf(model);      nm = model;    break;
   }
 
-  if (capIndex !== -1) {
+  if (index !== -1) {
     printMsg(site, colors.model(nm) + colors.italic(' removed') + ' from capture list, but is still currently capturing.');
   } else {
     printMsg(site, colors.model(nm) + colors.italic(' removed') + ' from capture list.');
@@ -304,6 +368,7 @@ function removeModel(site, model) {
   switch (site) {
     case MFC: config.mfcmodels = _.without(config.mfcmodels, model.uid); break;
     case CB:  config.cbmodels  = _.without(config.cbmodels, model);      break;
+    case IF:  config.ifmodels  = _.without(config.cbmodels, model);      break;
   }
 
   return true;
@@ -328,6 +393,7 @@ function removeModels(site, bundle) {
       break;
 
     case CB:
+    case IF:
       for (var i = 0; i < bundle.excludeModels.length; i++) {
         var nm = bundle.excludeModels[i];
         var index = config.cbmodels.indexOf(nm);
@@ -356,10 +422,22 @@ function writeConfig(site, onlineModels, dirty) {
       .catch(function(err) {
         printErrorMsg(site, err.toString());
       });
+      break;
 
     case CB:
       var myModels = [];
       _.each(config.cbmodels, function(nm) {
+        var modelIndex = onlineModels.indexOf(nm);
+        if (modelIndex !== -1) {
+          myModels.push(nm);
+        }
+      });
+      return myModels;
+      break;
+
+    case IF:
+      var myModels = [];
+      _.each(config.ifmodels, function(nm) {
         var modelIndex = onlineModels.indexOf(nm);
         if (modelIndex !== -1) {
           myModels.push(nm);
@@ -414,7 +492,7 @@ function getFileName(site, nm) {
 }
 
 function getCaptureArguments(url, filename) {
-  var spawnArguments = [
+  var spawnArgs = [
     '-hide_banner',
     '-v',
     'fatal',
@@ -430,7 +508,7 @@ function getCaptureArguments(url, filename) {
     'copy',
     config.captureDirectory + '/' + filename + '.ts'
   ];
-  return spawnArguments;
+  return spawnArgs;
 }
 
 function removeModelFromCapList(site, model) {
@@ -438,14 +516,9 @@ function removeModelFromCapList(site, model) {
   var match;
 
   switch (site) {
-    case MFC:
-      modelsCurrentlyCapturing = mfcModelsCurrentlyCapturing;
-      match = model.uid;
-      break;
-    case CB:
-      modelsCurrentlyCapturing = cbModelsCurrentlyCapturing;
-      match = model;
-      break;
+    case MFC: modelsCurrentlyCapturing = mfcModelsCurrentlyCapturing; match = model.uid; break;
+    case CB:  modelsCurrentlyCapturing = cbModelsCurrentlyCapturing;  match = model;     break;
+    case IF:  modelsCurrentlyCapturing = ifModelsCurrentlyCapturing;  match = model;     break;
   }
 
   // Remove from the currently capturing list
@@ -456,7 +529,8 @@ function removeModelFromCapList(site, model) {
 
   switch (site) {
     case MFC: mfcModelsCurrentlyCapturing = modelsCurrentlyCapturing; break;
-    case CB: mfcModelsCurrentlyCapturing = modelsCurrentlyCapturing;  break;
+    case CB:  mfcModelsCurrentlyCapturing = modelsCurrentlyCapturing; break;
+    case IF:  ifModelsCurrentlyCapturing  = modelsCurrentlyCapturing; break;
   }
 }
 
@@ -466,6 +540,7 @@ function removeFileFromCapList(site, filename) {
   switch (site) {
     case MFC: filesCurrentlyCapturing = mfcFilesCurrentlyCapturing; break;
     case CB:  filesCurrentlyCapturing = cbFilesCurrentlyCapturing;  break;
+    case IF:  filesCurrentlyCapturing = ifFilesCurrentlyCapturing;  break;
   }
 
   var index = filesCurrentlyCapturing.indexOf(filename);
@@ -475,19 +550,21 @@ function removeFileFromCapList(site, filename) {
 
   switch (site) {
     case MFC: mfcFilesCurrentlyCapturing = filesCurrentlyCapturing; break;
-    case CB:  cbfilesCurrentlyCapturing  = filesCurrentlyCapturing; break;
+    case CB:  cbFilesCurrentlyCapturing  = filesCurrentlyCapturing; break;
+    case IF:  ifFilesCurrentlyCapturing  = filesCurrentlyCapturing; break;
   }
 }
 
-function startCapture(site, spawnArguments, filename, model) {
+function startCapture(site, spawnArgs, filename, model) {
   var nm;
   switch (site) {
-    case MFC: nm = model.nm;
-    case CB:  nm = model;
+    case MFC: nm = model.nm; break;
+    case CB:
+    case IF:  nm = model; break;
   };
 
-  //printDebugMsg(site, 'Launching ffmpeg ' + spawnArguments);
-  var captureProcess = childProcess.spawn('ffmpeg', spawnArguments);
+  //printDebugMsg(site, 'Launching ffmpeg ' + spawnArgs);
+  var captureProcess = childProcess.spawn('ffmpeg', spawnArgs);
 
   captureProcess.stdout.on('data', function(data) {
     printMsg(site, data);
@@ -502,10 +579,15 @@ function startCapture(site, spawnArguments, filename, model) {
   });
 
   captureProcess.on('close', function(code) {
-    if (tryingToExit) {
-      process.stdout.write(colors.site(site) + ' ' + colors.model(nm) + ' capture interrupted\n' + colors.time('[' + getCurrentDateTime() + '] '));
-    } else {
-      printMsg(site, colors.model(nm) + ' stopped streaming');
+    // TODO: Since IF currently launches 4 ffmpeg procesess with 3
+    //       expected to fail, ignore printing when the ffmpeg
+    //       process ends.
+    if (site != IF) {
+      if (tryingToExit) {
+        process.stdout.write(colors.site(site) + ' ' + colors.model(nm) + ' capture interrupted\n' + colors.time('[' + getCurrentDateTime() + '] '));
+      } else {
+        printMsg(site, colors.model(nm) + ' stopped streaming');
+      }
     }
 
     removeModelFromCapList(site, model);
@@ -513,10 +595,23 @@ function startCapture(site, spawnArguments, filename, model) {
     fs.stat(config.captureDirectory + '/' + filename + '.ts', function(err, stats) {
       if (err) {
         if (err.code == 'ENOENT') {
-          // do nothing, file does not exist
-          printErrorMsg(site, colors.model(nm) + ': ' + filename + '.ts not found in capturing directory, cannot convert to ' + config.autoConvertType);
+          // Since IF launches 4 ffmpeg jobs, and 3 are guaranteed to fail
+          // do not print this error for IF.
+          // TODO: remove this conditional once automatic IF server discovery is
+          //       figured out.
+          if (site != IF) {
+            if (tryingToExit) {
+              process.stdout.write(colors.site(site) + ' ' + colors.error('[ERROR] ') + colors.model(nm) + ': ' + filename + '.ts not found in capturing directory, cannot convert to ' + config.autoConvertType);
+            } else {
+              printErrorMsg(site, colors.model(nm) + ': ' + filename + '.ts not found in capturing directory, cannot convert to ' + config.autoConvertType);
+            }
+          }
         } else {
-          printErrorMsg(site, colors.model(nm) + ': ' + err.toString());
+          if (tryingToExit) {
+            process.stdout.write(colors.site(site) + ' ' + colors.error('[ERROR] ') + colors.model(nm) + ': ' +err.toString());
+          } else {
+            printErrorMsg(site, colors.model(nm) + ': ' + err.toString());
+          }
         }
       } else if (stats.size === 0) {
         fs.unlink(config.captureDirectory + '/' + filename + '.ts');
@@ -532,6 +627,7 @@ function startCapture(site, spawnArguments, filename, model) {
     switch (site) {
       case MFC: mfcModelsCurrentlyCapturing.push(model.uid); break;
       case CB:  cbModelsCurrentlyCapturing.push(model);      break;
+      case IF:  ifModelsCurrentlyCapturing.push(model);      break;
     }
   }
 }
@@ -539,7 +635,7 @@ function startCapture(site, spawnArguments, filename, model) {
 function createMfcCaptureProcess(model) {
   if (mfcModelsCurrentlyCapturing.indexOf(model.uid) != -1) {
     printDebugMsg(MFC, colors.model(model.nm) + ' is already capturing');
-    return; // resolve immediately
+    return;
   }
 
   if (tryingToExit) {
@@ -553,23 +649,21 @@ function createMfcCaptureProcess(model) {
     var filename = getFileName(MFC, model.nm);
     mfcFilesCurrentlyCapturing.push(filename);
 
-    var spawnArguments = getCaptureArguments('http://video' + (model.u.camserv - 500) + '.myfreecams.com:1935/NxServer/ngrp:mfc_' + (100000000 + model.uid) + '.f4v_mobile/playlist.m3u8', filename);
+    var spawnArgs = getCaptureArguments('http://video' + (model.u.camserv - 500) + '.myfreecams.com:1935/NxServer/ngrp:mfc_' + (100000000 + model.uid) + '.f4v_mobile/playlist.m3u8', filename);
 
-    printMsg(MFC, colors.model(model.nm) + ', pre capture');
-    startCapture(MFC, spawnArguments, filename, model);
-    printMsg(MFC, colors.model(model.nm) + ', post capture');
+    startCapture(MFC, spawnArgs, filename, model);
   })
   .catch(function(err) {
     printErrorMsg(MFC, colors.model(model.nm) + ': ' + err.toString());
   });
 }
 
-function getCbStream(modelName) {
+function getCbStream(nm) {
   return Promise.try(function() {
-    return session.get('https://chaturbate.com/' + modelName + '/');
+    return session.get('https://chaturbate.com/' + nm + '/');
   }).then(function (response) {
-    var commandArguments = {
-      modelName: modelName,
+    var cmdargs = {
+      nm: nm,
     };
 
     var $ = cheerio.load(response.body);
@@ -582,43 +676,102 @@ function getCbStream(modelName) {
     var streamData = scripts.match(/(https\:\/\/\w+\.stream\.highwebmedia\.com\/live-edge\/[\w\-]+\/playlist\.m3u8)/i);
 
     if (streamData !== null) {
-      commandArguments.streamServer = streamData[1];
+      cmdargs.url = streamData[1];
     } else {
-      printErrorMsg(CB, modelName + ' is offline');
+      printErrorMsg(CB, nm + ' is offline');
     }
 
-    return commandArguments;
+    return cmdargs;
   })
   .catch(function(err) {
-    printErrorMsg(CB, colors.model(modelName) + ': ' + err.toString());
+    printErrorMsg(CB, colors.model(nm) + ': ' + err.toString());
   });
 }
 
-function createCbCaptureProcess(modelName) {
-  if (cbModelsCurrentlyCapturing.indexOf(modelName) != -1) {
-    printDebugMsg(CB, colors.model(modelName) + ' is already capturing');
+function createCbCaptureProcess(nm) {
+  if (cbModelsCurrentlyCapturing.indexOf(nm) != -1) {
+    printDebugMsg(CB, colors.model(nm) + ' is already capturing');
     return; // resolve immediately
   }
 
   if (tryingToExit) {
-    printDebugMsg(CB, colors.model(modelName) + ' is now online, but capture not started due to ctrl+c');
+    printDebugMsg(CB, colors.model(nm) + ' is now online, but capture not started due to ctrl+c');
     return;
   }
 
-  printMsg(CB, colors.model(modelName) + ' is now online, starting capturing process');
+  printMsg(CB, colors.model(nm) + ' is now online, starting capturing process');
 
   return Promise.try(function() {
-    return getCbStream(modelName);
-  }).then(function (commandArguments) {
-    var filename = getFileName(CB, commandArguments.modelName);
+    return getCbStream(nm);
+  }).then(function (cmdargs) {
+    var filename = getFileName(CB, cmdargs.nm);
     cbFilesCurrentlyCapturing.push(filename);
 
-    var spawnArguments = getCaptureArguments(commandArguments.streamServer, filename);
+    var spawnArgs = getCaptureArguments(cmdargs.url, filename);
 
-    startCapture(CB, spawnArguments, filename, commandArguments.modelName);
+    startCapture(CB, spawnArgs, filename, cmdargs.nm);
   })
   .catch(function(err) {
-    printErrorMsg(CB, colors.model(modelName) + ' ' + err.toString());
+    printErrorMsg(CB, colors.model(nm) + ' ' + err.toString());
+  });
+}
+
+function getIfStreams(nm) {
+  return Promise.try(function() {
+    //http://www.ifriends.net/membrg/showclub_v2_custom.dll?pclub=DAWNSPLACE&pStyle=Home
+    return session.get('http://www.ifriends.net/membrg/showclub_v2_custom.dll?pclub=' + nm + '&pStyle=Home');
+  }).then(function (response) {
+    var $ = cheerio.load(response.body);
+
+    // Get the SessionID
+    var sessionID = $('input[name="f_hid_SessionID_ExSignIn"]').attr('value');
+
+    // TODO: Don't currently know how to automatically discover the correct
+    //       stream server.  For now, ffmpeg is launched for all four servers
+    //       and 3 of the jobs will die.
+    var commands = [];
+    for (var i = 1; i <= 4; i++) {
+      var cmdargs = {
+        nm: nm,
+      };
+
+      cmdargs.url = 'http://STREAM0' + i + '.ifriends.net:1935/LSFlashVCH/' + nm + '/' + nm + sessionID + '/playlist.m3u8';
+      commands.push(cmdargs);
+    }
+    return commands;
+  })
+  .catch(function(err) {
+    printErrorMsg(IF, colors.model(nm) + ': ' + err.toString());
+  });
+}
+
+function createIfCaptureProcess(nm) {
+  if (ifModelsCurrentlyCapturing.indexOf(nm) != -1) {
+    printDebugMsg(IF, colors.model(nm) + ' is already capturing');
+    return; // resolve immediately
+  }
+
+  if (tryingToExit) {
+    printDebugMsg(IF, colors.model(nm) + ' is now online, but capture not started due to ctrl+c');
+    return;
+  }
+
+  printMsg(IF, colors.model(nm) + ' is now online, starting capturing process');
+
+  return Promise.try(function() {
+    return getIfStreams(nm);
+  }).then(function (commands) {
+    for (var i = 0; i < commands.length; i++) {
+      var filename = getFileName(IF, commands[i].nm) + '_' + (i+1);
+      ifFilesCurrentlyCapturing.push(filename);
+
+      var spawnArgs = getCaptureArguments(commands[i].url, filename);
+
+      startCapture(IF, spawnArgs, filename, commands[i].nm);
+    }
+  })
+  .catch(function(err) {
+    printErrorMsg(IF, colors.model(nm) + ' ' + err.toString());
   });
 }
 
@@ -675,11 +828,11 @@ function postProcess(filename) {
   var myCompleteProcess = childProcess.spawn('ffmpeg', mySpawnArguments);
 
   myCompleteProcess.stdout.on('data', function(data) {
-    printMsg('', data.toString);
+    printMsg('', data);
   });
 
   myCompleteProcess.stderr.on('data', function(data) {
-    printMsg('', data.toString);
+    printMsg('', data);
   });
 
   myCompleteProcess.on('close', function(code) {
@@ -704,10 +857,11 @@ function postProcess(filename) {
 function mainSiteLoop(site) {
   printDebugMsg(site, 'Start searching for new models');
 
-  Promise .try(function() {
+  Promise.try(function() {
     return getOnlineModels(site);
   })
   .then(function(onlineModels) {
+    printMsg(site, onlineModels.length  + ' model(s) online');
     return selectMyModels(site, onlineModels);
   })
   .then(function(myModels) {
@@ -717,7 +871,7 @@ function mainSiteLoop(site) {
         switch (site) {
           case MFC: return Promise.all(myModels.map(createMfcCaptureProcess));   break;
           case CB:  return Promise.all(myModels.map(createCbCaptureProcess));    break;
-      break;
+          case IF:  return Promise.all(myModels.map(createIfCaptureProcess));    break;
         }
       } else {
         return;
@@ -740,9 +894,12 @@ var tryingToExit = 0;
 var mfcGuest;
 var myMfcModels = [];
 var mfcModelsCurrentlyCapturing = new Array();
-var mfcFilesCurrentlyCapturing = new Array();
-var cbModelsCurrentlyCapturing = new Array();
-var cbFilesCurrentlyCapturing = new Array();
+var mfcFilesCurrentlyCapturing  = new Array();
+var cbModelsCurrentlyCapturing  = new Array();
+var cbFilesCurrentlyCapturing   = new Array();
+var ifModelsCurrentlyCapturing  = new Array();
+var ifModelCapCount             = new Array();
+var ifFilesCurrentlyCapturing   = new Array();
 
 var config = yaml.safeLoad(fs.readFileSync('config.yml', 'utf8'));
 
@@ -769,9 +926,11 @@ function tryExit() {
   // SIGINT will get passed to any running ffmpeg captures.
   // Must delay exiting until the capture and postProcess
   // for all models have finished.  Keep checking every 1s
-  if (semaphore == 0 && mfcFilesCurrentlyCapturing.length == 0 && cbFilesCurrentlyCapturing.length == 0) {
+  if (semaphore == 0 && mfcFilesCurrentlyCapturing.length == 0 && cbFilesCurrentlyCapturing.length == 0 && ifFilesCurrentlyCapturing.length == 0) {
     process.stdout.write('\n');
-    mfcGuest.disconnect();
+    if (config.enableMFC) {
+      mfcGuest.disconnect();
+    }
     process.exit(0);
   } else {
     sleep(1000).then(() => {
@@ -787,10 +946,11 @@ process.on('SIGINT', function() {
   // Prevent bad things from happening if user holds down ctrl+c
   if (!tryingToExit) {
     tryingToExit = 1;
-    if (semaphore > 0 || mfcFilesCurrentlyCapturing.length > 0 || cbFilesCurrentlyCapturing.length > 0) {
+    if (semaphore > 0 || mfcFilesCurrentlyCapturing.length > 0 || cbFilesCurrentlyCapturing.length > 0 || ifFilesCurrentlyCapturing.length > 0) {
+      var capsInProgress = mfcFilesCurrentlyCapturing.length + cbFilesCurrentlyCapturing.length + ifFilesCurrentlyCapturing.length;
       // extra newline to avoid ^C
       process.stdout.write('\n');
-      printMsg('', 'Waiting for ' + (mfcFilesCurrentlyCapturing.length + cbFilesCurrentlyCapturing.length) + ' capture stream(s) to end.');
+      printMsg('', 'Waiting for ' + capsInProgress + ' capture stream(s) to end.');
       process.stdout.write(colors.time('[' + getCurrentDateTime() + '] ')); // log beautification
     }
     tryExit();
@@ -810,5 +970,9 @@ if (config.enableMFC) {
 
 if (config.enableCB) {
   mainSiteLoop(CB);
+}
+
+if (config.enableIF) {
+  mainSiteLoop(IF);
 }
 

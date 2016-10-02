@@ -1,8 +1,8 @@
 captureDirectory: capturing
 completeDirectory: captured
-modelScanInterval: 350
-autoConvertType: mp4 # also mkv or none to leave as ts
-autoDelete: false # warning: setting to true will delete captures
+modelScanInterval: 300
+autoConvertType: mp4
+autoDelete: false
 dateFormat: YYYYMMDD-HHmmss
 debug: true
 modelcolor: magenta
@@ -13,9 +13,15 @@ errorcolor: red
 includeSiteInFile: true
 enableMFC: true
 enableCB: true
+enableIF: true
 mfcmodels:
-  - 3623822  # LaceyBlack
-  - 12513225 # CodiLake
+  - 3623822
+  - 12513225
+  - 15761593
+  - 4585086
 cbmodels:
   - aynmarie
   - theemilygrey
+  - katyandmax
+ifmodels:
+  - COLLEGE_DOLL18_
