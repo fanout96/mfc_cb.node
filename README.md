@@ -17,8 +17,10 @@ This is a Node.JS application, so it works anywhere that Node.JS does.
 
 * SIGINT handler which cleanly shuts down, stopping all captures, and finishing all post-process conversions.
 
-* Captures are named in the format <model>_<site>_<datetime>.[mp4|mkv]
+* Captures are named in the format model_site_datetime.[mp4|mkv]
+
 ** datetime format can be controled in the config file
+
 ** site is optional and can be disabled in the config file
 
 Setup
