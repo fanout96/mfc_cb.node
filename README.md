@@ -7,21 +7,19 @@ This is a fork of [CapMyFreeCamsNodeJS](https://github.com/pusspounder/CapMyFree
 
 ### About ###
 
-mfc_cb.node will automatically record either MyFreeCams.com or Chaturbate.com streams.
+mfc_cb.node will automatically record either MyFreeCams.com or Chaturbate.com streams.  There is also experimental support for ifriends.com. (Does this mean the repo-name needs to change? :-)
 
 This is a Node.JS application, so it works anywhere that Node.JS does.
 
-mfc_cb.node reintegrates the Chaturbate support of the original capturbate-node, however capturbate-node uses an account login mechanism and rtmpdump to record.  mfc_cb.node does not login to your Chaturbate account and uses ffmpeg to record.
+* Uses ffmpeg for all captures.
 
-The primary feature enhancements over the parent repositories are:
+* Automatic (optional) post-process conversion from ts containers to mp4 or mkv.
 
-* Automatic conversion from ts containers to either mp4 or mkv.  No need to run batch files.
+* SIGINT handler which cleanly shuts down, stopping all captures, and finishing all post-process conversions.
 
-* SIGINT handler so that it can be cleanly shut down and all post-process conversion steps completed for interrupted recordings.
-
-* Ability to control output colors from config.yml (useful if you like dark themes, and blue is hard to read)
-
-* Ability to control date and time format for file names and also whether to include the name of the site.
+* Captures are named in the format <model>_<site>_<datetime>.[mp4|mkv]
+** datetime format can be controled in the config file
+** site is optional and can be disabled in the config file
 
 Setup
 ==========
