@@ -1,0 +1,14 @@
+{
+    "camelcase"  : true,
+    "curly"      : true,
+    "forin"      : true,
+    "freeze"     : true,
+    "immed"      : true,
+    "latedef"    : true,
+    "loopfunc"   : true,
+    "quotmark"   : true,
+    "unused"     : true,
+
+    "node"       : true,
+    "esversion"  : 6
+}

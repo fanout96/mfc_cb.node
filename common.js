@@ -3,19 +3,38 @@
 var fs     = require('fs');
 var yaml   = require('js-yaml');
 var moment = require('moment');
-var S      = require('string');
 var colors = require('colors/safe');
 
 var config = yaml.safeLoad(fs.readFileSync('config.yml', 'utf8'));
 var MFC;
 var CB;
-var IF;
+
+function getDateTime() {
+  return moment().format(config.dateFormat);
+}
+
+function getSiteName(site) {
+  var name;
+  switch (site) {
+    case MFC: name = 'MFC'; break;
+    case CB:  name = 'CB '; break;
+  }
+  return name;
+}
 
 module.exports = {
   getSiteName,
 
   getDateTime: function() {
     return getDateTime();
+  },
+
+  writeFile: function(filename, msg) {
+    fs.writeFile('/tmp/' + filename, msg, function(err) {
+      if (err) {
+          return console.log(err);
+      }
+    });
   },
 
   getFileName: function(site, nm) {
@@ -28,10 +47,10 @@ module.exports = {
     return filename;
   },
 
-  setSites: function(mfcSite, cbSite, ifSite) {
+  //setSites: function(mfcSite, cbSite, ifSite) {
+  setSites: function(mfcSite, cbSite) {
     MFC = mfcSite;
     CB = cbSite;
-    IF = ifSite;
   },
 
   initColors: function() {
@@ -73,7 +92,7 @@ module.exports = {
   },
 
   errMsg: function(site, msg) {
-    if (site == null) {
+    if (site === null) {
       console.log(colors.time('[' + getDateTime() + ']'), colors.error('[ERROR]'), msg);
     } else {
       console.log(colors.time('[' + getDateTime() + ']'), colors.site(getSiteName(site)), colors.error('[ERROR]'), msg);
@@ -82,27 +101,12 @@ module.exports = {
 
   dbgMsg: function(site, msg) {
     if (config.debug && msg) {
-      if (site == null) {
+      if (site === null) {
         console.log(colors.time('[' + getDateTime() + ']'), colors.debug('[DEBUG]'), msg);
       } else {
         console.log(colors.time('[' + getDateTime() + ']'), colors.site(getSiteName(site)), colors.debug('[DEBUG]'), msg);
       }
     }
   }
-
-}
-
-function getDateTime() {
-  return moment().format(config.dateFormat);
-}
-
-function getSiteName(site) {
-  var name;
-  switch (site) {
-    case MFC: name = 'MFC'; break;
-    case CB:  name = 'CB '; break;
-    case IF:  name = 'IF '; break;
-  }
-  return name;
-}
+};
 
