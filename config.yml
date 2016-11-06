@@ -13,7 +13,6 @@ errorcolor: red
 includeSiteInFile: true
 enableMFC: true
 enableCB: true
-enableIF: true
 mfcmodels:
   - 3623822
   - 12513225
