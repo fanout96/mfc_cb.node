@@ -1,581 +1,276 @@
 'use strict';
 require('events').EventEmitter.prototype._maxListeners = 100;
-var Promise = require('bluebird');
-var fs = require('fs');
-var yaml = require('js-yaml');
-var moment = require('moment');
-var mkdirp = require('mkdirp');
-var S = require('string');
-var WebSocketClient = require('websocket').client;
-var http = require('http');
-var bhttp = require('bhttp');
-var cheerio = require('cheerio');
-var colors = require('colors/safe');
-var _ = require('underscore');
+
+// Load 3rd Party Libraries
+var Promise      = require('bluebird');
+var fs           = require('fs');
+var yaml         = require('js-yaml');
+var mkdirp       = require('mkdirp');
+var colors       = require('colors/safe');
+var _            = require('underscore');
 var childProcess = require('child_process');
-var path = require('path');
-var mfc = require("MFCAuto");
+var path         = require('path');
 
-var session = bhttp.session();
+// Load local libraries
+var common       = require('./common');
+var MFC          = require('./mfc');
+var CB           = require('./cb');
 
-function getCurrentDateTime() {
-  return moment().format(config.dateFormat);
-};
+var SITES        = [MFC, CB];
+var semaphore    = 0; // Counting semaphore
+var tryingToExit = 0;
+var config       = yaml.safeLoad(fs.readFileSync('config.yml', 'utf8'));
 
-function initColors() {
-  colors.setTheme({
-    model: config.modelcolor, //'magenta',
-    time:  config.timecolor,  //'grey',
-    site:  config.sitecolor,  //'green',
-    debug: config.debugcolor, //'yellow',
-    error: config.errorcolor, // 'red',
-  });
-}
+config.captureDirectory  = path.resolve(config.captureDirectory);
+config.completeDirectory = path.resolve(config.completeDirectory);
 
-function printMsg(site, msg) {
-  if (site == '') {
-    console.log(colors.time('[' + getCurrentDateTime() + ']'), msg);
-  } else {
-    console.log(colors.time('[' + getCurrentDateTime() + ']'), colors.site(site), msg);
-  }
-}
-
-function printErrorMsg(site, msg) {
-  if (site == '') {
-    console.log(colors.time('[' + getCurrentDateTime() + ']'), colors.error('[ERROR]'), msg);
-  } else {
-    console.log(colors.time('[' + getCurrentDateTime() + ']'), colors.site(site), colors.error('[ERROR]'), msg);
-  }
-}
-
-function printDebugMsg(site, msg) {
-  if (config.debug && msg) {
-    if (site == '') {
-      console.log(colors.time('[' + getCurrentDateTime() + ']'), colors.debug('[DEBUG]'), msg);
-    } else {
-      console.log(colors.time('[' + getCurrentDateTime() + ']'), colors.site(site), colors.debug('[DEBUG]'), msg);
-    }
-  }
-}
+common.setSites(MFC, CB);
+common.initColors();
 
 // time in milliseconds
 function sleep(time) {
   return new Promise((resolve) => setTimeout(resolve, time));
 }
 
-function getMfcOnlineModels(fileno) {
-  return Promise.try(function() {
-    var onlineModels = mfc.Model.findModels((m) => true);
-    printMsg('MFC', onlineModels.length  + ' model(s) online');
-    return onlineModels;
-  })
-  .catch(function(err) {
-    printErrorMsg('MFC', err.toString());
-  });
+// Processes updates.yml and adds or removes models from config.yml
+function processUpdates(site) {
+  var len;
+  switch (site) {
+    case MFC: len = config.mfcmodels.length; break;
+    case CB:  len = config.cbmodels.length;  break;
+  }
+  common.dbgMsg(site, len + ' model(s) in config');
+
+  var stats = fs.statSync('updates.yml');
+
+  var includeModels = [];
+  var excludeModels = [];
+
+  if (stats.isFile()) {
+    var updates = yaml.safeLoad(fs.readFileSync('updates.yml', 'utf8'));
+
+    switch (site) {
+      case MFC:
+        if (!updates.includeMfcModels) {
+          updates.includeMfcModels = [];
+        } else if (updates.includeMfcModels.length > 0) {
+          common.msg(site, updates.includeMfcModels.length + ' model(s) to include');
+          includeModels = updates.includeMfcModels;
+          updates.includeMfcModels = [];
+        }
+
+        if (!updates.excludeMfcModels) {
+          updates.excludeMfcModels = [];
+        } else if (updates.excludeMfcModels.length > 0) {
+          common.msg(site, updates.excludeMfcModels.length + ' model(s) to exclude');
+          excludeModels = updates.excludeMfcModels;
+          updates.excludeMfcModels = [];
+        }
+        break;
+
+      case CB:
+        if (!updates.includeCbModels) {
+          updates.includeCbModels = [];
+        } else if (updates.includeCbModels.length > 0) {
+          common.msg(CB, updates.includeCbModels.length + ' model(s) to include');
+          includeModels = updates.includeCbModels;
+          updates.includeCbModels = [];
+        }
+
+        if (!updates.excludeCbModels) {
+          updates.excludeCbModels = [];
+        } else if (updates.excludeCbModels.length > 0) {
+          common.msg(site, updates.excludeCbModels.length + ' model(s) to exclude');
+          excludeModels = updates.excludeCbModels;
+          updates.excludeCbModels = [];
+        }
+        break;
+    }
+
+    // if there were some updates, then rewrite updates.yml
+    if (includeModels.length > 0 || excludeModels.length > 0) {
+      fs.writeFileSync('updates.yml', yaml.safeDump(updates), 'utf8');
+    }
+  }
+
+  var bundle = {includeModels: includeModels, excludeModels: excludeModels, dirty: false};
+  return bundle;
 }
 
-function getCbOnlineModels(page) {
+function addModel(site, model) {
+  var index;
+  var nm;
 
-  return Promise.try(function() {
-    return session.get("https://chaturbate.com/followed-cams/?page=" + page);
-  }).then(function (response) {
+  switch (site) {
+    case MFC: index = config.mfcmodels.indexOf(model.uid); nm = model.nm; break;
+    case CB:  index = config.cbmodels.indexOf(model);      nm = model;    break;
+  }
 
-    var $ = cheerio.load(response.body);
+  if (index === -1) {
+    common.msg(site, colors.model(nm) + colors.italic(' added') + ' to capture list');
 
-    // Get an array of models found on this page
-    var currentModels = $("#main div.content ul.list").children("li")
-    .filter(function(){
-        return $(this).find("div.details ul.sub-info li.cams").text() != "offline";
-    })
-    .map(function(){
-        return $(this).find("div.title a").text().trim().split(',');
-    })
-    .get();
+    switch (site) {
+      case MFC: config.mfcmodels.push(model.uid); break;
+      case CB:  config.cbmodels.push(nm);         break;
+    }
 
-    // Find the total number of model pages
-    var pages = $("#main div.content ul.paging").children("li")
-    .filter(function() {
-        return $(this).find('a').text().trim() != 'next';
-    })
-    .map(function() {
-        return $(this).find('a').text().trim();
-    })
-    .get();
-    var totalPages = pages[pages.length-1];
+    return true;
+  } else {
+    common.msg(site, colors.model(nm) + ' is already in the capture list');
+  }
 
-    // Recurse until models on all pages are loaded
-    if (page < totalPages) {
-      return getCbOnlineModels(page+1)
-      .then(function(models) {
-        return currentModels.concat(models);
+  return false;
+}
+
+function addModels(site, bundle) {
+  var i;
+
+  switch (site) {
+    case MFC:
+      // Fetch the UID of new models to add to capture list.
+      // The model does not have to be online for this.
+      var queries = [];
+      for (i = 0; i < bundle.includeModels.length; i++) {
+        var query = MFC.queryUser(bundle.includeModels[i]).then((model) => {
+          bundle.dirty |= addModel(site, model);
+        });
+        queries.push(query);
+      }
+
+      return Promise.all(queries).then(function() {
+        return bundle;
+      });
+
+    case CB:
+      for (i = 0; i < bundle.includeModels.length; i++) {
+        var nm = bundle.includeModels[i];
+        bundle.dirty |= addModel(site, nm);
+      }
+      return bundle;
+  }
+  return;
+}
+
+function removeModel(site, model) {
+  var match;
+  var nm;
+
+  switch (site) {
+    case MFC: match = model.uid; nm = model.nm; break;
+    case CB:  match = model;     nm = model;    break;
+  }
+
+  common.msg(site, colors.model(nm) + colors.italic(' removed') + ' from capture list.');
+  if (site.isCurrentlyCapping(match)) {
+    site.stopCapping(match);
+  }
+
+  switch (site) {
+    case MFC: config.mfcmodels = _.without(config.mfcmodels, model.uid); break;
+    case CB:  config.cbmodels  = _.without(config.cbmodels,  model);     break;
+  }
+
+  return true;
+}
+
+function removeModels(site, bundle) {
+  var i;
+  switch (site) {
+    case MFC:
+      // Fetch the UID of current models to be excluded from capture list.
+      // The model does not have to be online for this.
+      var queries = [];
+      for (i = 0; i < bundle.excludeModels.length; i++) {
+        var query = MFC.queryUser(bundle.excludeModels[i]).then((model) => {
+          bundle.dirty |= removeModel(site, model);
+        });
+        queries.push(query);
+      }
+
+      return Promise.all(queries).then(function() {
+        return bundle.dirty;
+      });
+
+    case CB:
+      for (i = 0; i < bundle.excludeModels.length; i++) {
+        var nm = bundle.excludeModels[i];
+        var index = config.cbmodels.indexOf(nm);
+        if (index !== -1) {
+          bundle.dirty |= removeModel(site, nm);
+        }
+      }
+      return bundle.dirty;
+  }
+  return;
+}
+
+function writeConfig(site, onlineModels, dirty) {
+  if (dirty) {
+    common.dbgMsg(site, 'Rewriting config.yml');
+    fs.writeFileSync('config.yml', yaml.safeDump(config), 'utf8');
+  }
+
+  var modelsToCap = [];
+  switch (site) {
+    case MFC:
+      MFC.clearMyModels();
+      return Promise.all(config.mfcmodels.map(MFC.checkModelState))
+      .then(function() {
+        return MFC.getModelsToCap();
       })
       .catch(function(err) {
-        printErrorMsg('CB ', err);
-      })
-    } else {
-      return currentModels;
-    }
-  })
-  .catch(function(err) {
-    printErrorMsg('CB ', err.toString());
-  });
-}
-
-function selectMfcMyModels(onlineModels) {
-  if (onlineModels == null) {
-    return;
-  }
-
-  return Promise.try(function() {
-    printDebugMsg('MFC', config.mfcmodels.length + ' model(s) in config');
-
-    var stats = fs.statSync('updates.yml');
-
-    var includeMfcModels = [];
-    var excludeMfcModels = [];
-
-    if (stats.isFile()) {
-      var updates = yaml.safeLoad(fs.readFileSync('updates.yml', 'utf8'));
-      if (!updates.includeMfcModels) {
-          updates.includeMfcModels = [];
-      }
-
-      if (!updates.excludeMfcModels) {
-        updates.excludeMfcModels = [];
-      }
-
-      // first we push changes to main config
-      if (updates.includeMfcModels.length > 0) {
-        printMsg('MFC', updates.includeMfcModels.length + ' model(s) to include');
-        includeMfcModels = updates.includeMfcModels;
-        updates.includeMfcModels = [];
-      }
-
-      if (updates.excludeMfcModels.length > 0) {
-        printMsg('MFC', updates.excludeMfcModels.length + ' model(s) to exclude');
-        excludeMfcModels = updates.excludeMfcModels;
-        updates.excludeMfcModels = [];
-      }
-
-      // if there were some updates, then we reset updates.yml
-      if (includeMfcModels.length > 0 || excludeMfcModels.length > 0) {
-        fs.writeFileSync('updates.yml', yaml.safeDump(updates), 0, 'utf8');
-      }
-    }
-
-    var bundle = {includeMfcModels: includeMfcModels, excludeMfcModels: excludeMfcModels, dirty: false};
-    return bundle;
-  }).then(function(bundle) {
-
-    // Fetch the UID of new models to add to capture list.
-    // The model does not have to be online for this.
-    var queries = [];
-    for (var i = 0; i < bundle.includeMfcModels.length; i++) {
-      var query = mfcGuest.queryUser(bundle.includeMfcModels[i]).then((model) => {
-        var index = config.mfcmodels.indexOf(model.uid);
-        if (index === -1) {
-          printMsg('MFC', colors.model(model.nm) + colors.italic(' added') + ' to capture list');
-          config.mfcmodels.push(model.uid);
-          bundle.dirty = true;
-        } else {
-          printMsg('MFC', colors.model(model.nm) + ' is already in the capture list');
-        }
-      });
-      queries.push(query);
-    }
-
-    return Promise.all(queries).then(function() {
-      return bundle;
-    });
-  }).then(function(bundle) {
-    // Fetch the UID of current models to be excluded from capture list.
-    // The model does not have to be online for this.
-    var queries = [];
-    for (var i = 0; i < bundle.excludeMfcModels.length; i++) {
-      var query = mfcGuest.queryUser(bundle.excludeMfcModels[i]).then((model) => {
-        var capIndex = mfcModelsCurrentlyCapturing.indexOf(model.uid);
-        if (capIndex !== -1) {
-          printMsg('MFC', colors.model(model.nm) + colors.italic(' removed') + ' from capture list, but is still currently capturing.');
-        } else {
-          printMsg('MFC', colors.model(model.nm) + colors.italic(' removed') + ' from capture list.');
-        }
-        config.mfcmodels = _.without(config.mfcmodels, model.uid);
-        bundle.dirty = true;
-      });
-      queries.push(query);
-    }
-
-    return Promise.all(queries).then(function() {
-      return bundle.dirty;
-    });
-  }).then(function(dirty) {
-    if (dirty) {
-      fs.writeFileSync('config.yml', yaml.safeDump(config), 0, 'utf8');
-    }
-
-    myMfcModels = [];
-    return Promise.all(config.mfcmodels.map(checkMfcModelState));
-  })
-  .catch(function(err) {
-    printErrorMsg('MFC', err.toString());
-  });
-}
-
-function checkMfcModelState(uid) {
-
-  return Promise.try(function() {
-    // Query model by ID number
-    return mfcGuest.queryUser(uid);
-  }).then(function(model) {
-    if (model !== undefined) {
-      if (model.vs === mfc.STATE.FreeChat) {
-        printMsg('MFC', colors.model(model.nm) + ' is in public chat!');
-        myMfcModels.push(model);
-      } else if (model.vs === mfc.STATE.GroupShow) {
-        printMsg('MFC', colors.model(model.nm) + ' is in a group show');
-      } else if (model.vs === mfc.STATE.Private) {
-        if (model.truepvt) {
-          printMsg('MFC', colors.model(model.nm) + ' is in a true private show.');
-        } else {
-          printMsg('MFC', colors.model(model.nm) + ' is in a private show.');
-        }
-      } else if (model.vs === mfc.STATE.Away) {
-        printMsg('MFC', colors.model(model.nm) + ' is away');
-      } else if (model.vs === mfc.STATE.Online) {
-        printMsg('MFC', colors.model(model.nm + '\'s') + ' cam is off.');
-      }
-    }
-    return true;
-  })
-  .catch(function(err) {
-    printErrorMsg('MFC', err.toString());
-  });
-}
-
-function selectCbMyModels(onlineModels) {
-  if (onlineModels == null) {
-    return;
-  }
-
-  printMsg('CB ', onlineModels.length  + ' model(s) online');
-
-  return Promise.try(function() {
-    printDebugMsg('CB ', config.cbmodels.length + ' model(s) in config');
-
-    var stats = fs.statSync('updates.yml');
-
-    var includeCbModels = [];
-    var excludeCbModels = [];
-
-    if (stats.isFile()) {
-      var updates = yaml.safeLoad(fs.readFileSync('updates.yml', 'utf8'));
-
-      if (!updates.includeCbModels) {
-        updates.includeCbModels = [];
-      }
-
-      if (!updates.excludeCbModels) {
-        updates.excludeCbModels = [];
-      }
-
-      // first we push changes to main config
-      if (updates.includeCbModels.length > 0) {
-        printMsg('CB ', updates.includeCbModels.length + ' model(s) to include');
-        includeCbModels = updates.includeCbModels;
-        updates.includeCbModels = [];
-      }
-
-      if (updates.excludeCbModels.length > 0) {
-        printMsg('CB ', updates.excludeCbModels.length + ' model(s) to exclude');
-        excludeCbModels = updates.excludeCbModels;
-        updates.excludeCbModels = [];
-      }
-
-      // if there were some updates, then we reset updates.yml
-      if (includeCbModels.length > 0 || excludeCbModels.length > 0) {
-        fs.writeFileSync('updates.yml', yaml.safeDump(updates), 0, 'utf8');
-      }
-    }
-
-    var bundle = {includeCbModels: includeCbModels, excludeCbModels: excludeCbModels, dirty: false};
-    return bundle;
-  }).then(function(bundle) {
-
-    for (var i = 0; i < bundle.includeCbModels.length; i++) {
-      var nm = bundle.includeCbModels[i];
-      var index = config.cbmodels.indexOf(nm);
-      if (index === -1) {
-        printMsg('CB ', colors.model(nm) + colors.italic(' added') + ' to capture list');
-        config.cbmodels.push(nm);
-        bundle.dirty = true;
-      } else {
-        printMsg('CB ', colors.model(nm + ' is already in the capture list'));
-      }
-    }
-    return bundle;
-  }).then(function(bundle) {
-
-    for (var i = 0; i < bundle.excludeCbModels.length; i++) {
-      var nm = bundle.excludeCbModels[i];
-      var index = config.cbmodels.indexOf(nm);
-      if (index !== -1) {
-        var capIndex = cbModelsCurrentlyCapturing.indexOf(nm);
-        if (capIndex !== -1) {
-          printMsg('CB ', colors.model(nm) + colors.italic(' removed') + ' from capture list, but is still currently capturing.');
-        } else {
-          printMsg('CB ', colors.model(nm) + colors.italic(' removed') + ' from capture list.');
-        }
-        config.cbmodels = _.without(config.cbmodels, nm);
-        bundle.dirty = true;
-      }
-    }
-    return bundle.dirty;
-  }).then(function(dirty) {
-    if (dirty) {
-      printDebugMsg('CB ', "Rewriting config.yml");
-      fs.writeFileSync('config.yml', yaml.safeDump(config), 0, 'utf8');
-    }
-
-    var myModels = [];
-
-    _.each(config.cbmodels, function(nm) {
-      var modelIndex = onlineModels.indexOf(nm);
-      if (modelIndex !== -1) {
-        myModels.push(nm);
-      }
-    });
-
-    printDebugMsg('CB ', myModels.length  + ' model(s) to capture');
-
-    return myModels;
-  })
-  .catch(function(err) {
-    printErrorMsg('CB ', err.toString());
-  });
-}
-
-function createMfcCaptureProcess(model) {
-  if (mfcModelsCurrentlyCapturing.indexOf(model.uid) != -1) {
-    printDebugMsg('MFC', colors.model(model.nm) + ' is already capturing');
-    return; // resolve immediately
-  }
-
-  if (tryingToExit) {
-    printDebugMsg('MFC', model.nm + ' capture not starting due to ctrl+c');
-    return;
-  }
-
-  printMsg('MFC', colors.model(model.nm) + ', starting capturing process');
-
-  return Promise.try(function() {
-    var filename;
-    if (config.includeSiteInFile) {
-      filename = model.nm + '_mfc_' + getCurrentDateTime();
-    } else {
-      filename = model.nm + '_' + getCurrentDateTime();
-    }
-    mfcFilesCurrentlyCapturing.push(filename);
-    var spawnArguments = [
-      '-hide_banner',
-      '-v',
-      'fatal',
-      '-i',
-      'http://video' + (model.u.camserv - 500) + '.myfreecams.com:1935/NxServer/ngrp:mfc_' + (100000000 + model.uid) + '.f4v_mobile/playlist.m3u8',
-      // TODO: Some models get AV sync issues after a long time of recording.
-      //       Will experiment with a per-model option to enable ffmpeg audio
-      //       resampling to try and correct for sync issues.
-      //'-af',
-      //'aresample=async=1',
-      //'-vcodec',
-      '-c',
-      'copy',
-      config.captureDirectory + '/' + filename + '.ts'
-    ];
-
-    var captureProcess = childProcess.spawn('ffmpeg', spawnArguments);
-
-    captureProcess.stdout.on('data', function(data) {
-      printMsg('MFC', data);
-    });
-
-    captureProcess.stderr.on('data', function(data) {
-      printMsg('MFC', data);
-    });
-
-    captureProcess.on('error', function(err) {
-      printDebugMsg('MFC', err);
-    });
-
-    captureProcess.on('close', function(code) {
-      if (tryingToExit) {
-        process.stdout.write(colors.site('MFC') + ' ' + colors.model(model.nm) + ' capture interrupted\n' + colors.time('[' + getCurrentDateTime() + '] '));
-      } else {
-        printMsg('MFC', colors.model(model.nm) + ' stopped streaming');
-      }
-
-      var modelIndex = mfcModelsCurrentlyCapturing.indexOf(model.uid);
-
-      if (modelIndex !== -1) {
-        mfcModelsCurrentlyCapturing.splice(modelIndex, 1);
-      }
-
-      fs.stat(config.captureDirectory + '/' + filename + '.ts', function(err, stats) {
-        if (err) {
-          if (err.code == 'ENOENT') {
-            // do nothing, file does not exists
-          } else {
-            printErrorMsg('MFC', colors.model(model.nm) + ': ' + err.toString());
-          }
-        } else if (stats.size === 0) {
-          fs.unlink(config.captureDirectory + '/' + filename + '.ts');
-        } else {
-          postProcess(filename);
-        }
+        common.errMsg(site, err.toString());
       });
 
-      // Remove file from capturing list
-      var index = mfcFilesCurrentlyCapturing.indexOf(filename);
-      if (index !== -1) {
-        mfcFilesCurrentlyCapturing.splice(index, 1);
-      }
-    });
-
-    if (!!captureProcess.pid) {
-      mfcModelsCurrentlyCapturing.push(model.uid);
-    }
-  })
-  .catch(function(err) {
-    printErrorMsg('MFC', colors.model(model.nm) + ': ' + err.toString());
-  });
-}
-
-function getCbStream(modelName) {
-  return Promise.try(function() {
-    return session.get('https://chaturbate.com/' + modelName + '/');
-  }).then(function (response) {
-    var commandArguments = {
-      modelName: modelName,
-    };
-
-    var $ = cheerio.load(response.body);
-
-    var scripts = $('script')
-    .map(function(){
-      return $(this).text();
-    }).get().join('');
-
-    var streamData = scripts.match(/(https\:\/\/\w+\.stream\.highwebmedia\.com\/live-edge\/[\w\-]+\/playlist\.m3u8)/i);
-
-    if (streamData !== null) {
-      commandArguments.streamServer = streamData[1];
-    } else {
-      printErrorMsg('CB ', modelName + ' is offline');
-    }
-
-    return commandArguments;
-  })
-  .catch(function(err) {
-    printErrorMsg('CB ', colors.model(modelName) + ': ' + err.toString());
-  });
-}
-
-function createCbCaptureProcess(modelName) {
-  if (cbModelsCurrentlyCapturing.indexOf(modelName) != -1) {
-    printDebugMsg('CB ', colors.model(modelName) + ' is already capturing');
-    return; // resolve immediately
-  }
-
-  if (tryingToExit) {
-    printDebugMsg('CB ', colors.model(modelName) + ' is now online, but capture not started due to ctrl+c');
-    return;
-  }
-
-  printMsg('CB ', colors.model(modelName) + ' is now online, starting capturing process');
-
-  return Promise.try(function() {
-    return getCbStream(modelName);
-  }).then(function (commandArguments) {
-    var filename;
-    if (config.includeSiteInFile) {
-      filename = commandArguments.modelName + '_cb_' + getCurrentDateTime();
-    } else {
-      filename = commandArguments.modelName + '_' + getCurrentDateTime();
-    }
-    cbFilesCurrentlyCapturing.push(filename);
-    var spawnArguments = [
-      '-hide_banner',
-      '-v',
-      'fatal',
-      '-i',
-      commandArguments.streamServer,
-      '-c',
-      'copy',
-      config.captureDirectory + '/' + filename + '.ts'
-    ];
-
-    var captureProcess = childProcess.spawn('ffmpeg', spawnArguments);
-
-    captureProcess.stdout.on('data', function(data) {
-      printMsg('CB ', data.toString);
-    });
-
-    captureProcess.stderr.on('data', function(data) {
-      printMsg('CB ', data.toString);
-    });
-
-    captureProcess.on('error', function(err) {
-      printDebugMsg('CB ', err);
-    });
-
-    captureProcess.on('close', function(code) {
-      if (tryingToExit) {
-        process.stdout.write(colors.site('CB ') + ' ' + colors.model(commandArguments.modelName) + ' capture interrupted\n' + colors.time('[' + getCurrentDateTime() + '] '));
-      } else {
-        printMsg('CB ', colors.model(commandArguments.modelName) + ' stopped streaming');
-      }
-
-      var modelIndex = cbModelsCurrentlyCapturing.indexOf(modelName);
-
-      if (modelIndex !== -1) {
-        cbModelsCurrentlyCapturing.splice(modelIndex, 1);
-      }
-
-      fs.stat(config.captureDirectory + '/' + filename + '.ts', function(err, stats) {
-        if (err) {
-          if (err.code == 'ENOENT') {
-            // do nothing, file does not exists
-          } else {
-            printErrorMsg('CB ', colors.model(commandArguments.modelName) + ' ' + err.toString());
-          }
-        } else if (stats.size === 0) {
-          fs.unlink(config.captureDirectory + '/' + filename + '.ts');
-        } else {
-          postProcess(filename);
+    case CB:
+      _.each(config.cbmodels, function(nm) {
+        var modelIndex = onlineModels.indexOf(nm);
+        if (modelIndex !== -1) {
+          modelsToCap.push(nm);
         }
       });
+      return modelsToCap;
+  }
+}
 
-      // Remove file from capturing list
-      var index = cbFilesCurrentlyCapturing.indexOf(filename);
-      if (index !== -1) {
-        cbFilesCurrentlyCapturing.splice(index, 1);
-      }
-    });
-
-    if (!!captureProcess.pid) {
-      cbModelsCurrentlyCapturing.push(modelName);
-    }
+function getModelsToCap(site, onlineModels) {
+  if (onlineModels === null) {
+    return;
+  }
+  return Promise.try(function() {
+    return processUpdates(site);
+  })
+  .then(function(bundle) {
+    return addModels(site, bundle);
+  })
+  .then(function(bundle) {
+    return removeModels(site, bundle);
+  })
+  .then(function(dirty) {
+    return writeConfig(site, onlineModels, dirty);
   })
   .catch(function(err) {
-    printErrorMsg('CB ', colors.model(modelName) + ' ' + err.toString());
+    common.errMsg(site, err);
   });
+}
+
+function removeModelFromCapList(site, model) {
+  var index;
+
+  switch (site) {
+    case MFC: index = model.uid; break;
+    case CB:  index = model;     break;
+  }
+
+  site.removeModelFromCapList(index);
 }
 
 function postProcess(filename) {
   if (config.autoConvertType !== 'mp4' && config.autoConvertType !== 'mkv') {
-    printDebugMsg('', 'Moving ' + config.captureDirectory + '/' + filename + '.ts to ' + config.completeDirectory + '/' + filename + '.ts');
+    common.dbgMsg(null, 'Moving ' + config.captureDirectory + '/' + filename + '.ts to ' + config.completeDirectory + '/' + filename + '.ts');
     fs.rename(config.captureDirectory + '/' + filename + '.ts', config.completeDirectory + '/' + filename + '.ts', function(err) {
       if (err) {
-        printErrorMsg('', colors.site(filename) + ': ' + err.toString());
+        common.errMsg(null, colors.site(filename) + ': ' + err.toString());
       }
     });
     return;
@@ -614,30 +309,30 @@ function postProcess(filename) {
 
   if (tryingToExit) {
     if (config.debug) {
-      process.stdout.write(colors.debug('[DEBUG]') + ' Converting ' + filename + '.ts to ' + filename + '.' + config.autoConvertType + '\n' + colors.time('[' + getCurrentDateTime() + '] '));
+      process.stdout.write(colors.debug('[DEBUG]') + ' Converting ' + filename + '.ts to ' + filename + '.' + config.autoConvertType + '\n' + colors.time('[' + common.getDateTime() + '] '));
     }
   } else {
-    printDebugMsg('', 'Converting ' + filename + '.ts to ' + filename + '.' + config.autoConvertType);
+    common.dbgMsg(null, 'Converting ' + filename + '.ts to ' + filename + '.' + config.autoConvertType);
   }
 
   var myCompleteProcess = childProcess.spawn('ffmpeg', mySpawnArguments);
 
   myCompleteProcess.stdout.on('data', function(data) {
-    printMsg('', data.toString);
+    common.msg(null, data);
   });
 
   myCompleteProcess.stderr.on('data', function(data) {
-    printMsg('', data.toString);
+    common.msg(null, data);
   });
 
-  myCompleteProcess.on('close', function(code) {
+  myCompleteProcess.on('close', function() {
     fs.unlink(config.captureDirectory + '/' + filename + '.ts');
     // For debug, to keep disk from filling during active testing
     if (config.autoDelete) {
       if (tryingToExit) {
-        process.stdout.write(colors.error('[ERROR]') + ' Deleting ' + filename + '.' + config.autoConvertType + '\n' + colors.time('[' + getCurrentDateTime() + '] '));
+        process.stdout.write(colors.error('[ERROR]') + ' Deleting ' + filename + '.' + config.autoConvertType + '\n' + colors.time('[' + common.getDateTime() + '] '));
       } else {
-        printErrorMsg('', 'Deleting ' + filename + '.' + config.autoConvertType);
+        common.errMsg(null, 'Deleting ' + filename + '.' + config.autoConvertType);
       }
       fs.unlink(config.completeDirectory + '/' + filename + '.' + config.autoConvertType);
     }
@@ -645,87 +340,124 @@ function postProcess(filename) {
   });
 
   myCompleteProcess.on('error', function(err) {
-    printErrorMsg('', err);
+    common.errMsg(null, err);
   });
 }
 
-function mainMfcLoop() {
-  printDebugMsg('MFC', 'Start searching for new models');
+function startCapture(site, spawnArgs, filename, model) {
+  var nm;
+  switch (site) {
+    case MFC: nm = model.nm; break;
+    case CB:  nm = model;    break;
+  }
 
-  Promise .try(function() {
-    return getMfcOnlineModels();
-  })
-  .then(function(onlineModels) {
-    return selectMfcMyModels(onlineModels);
-  })
-  .then(function() {
-    if (myMfcModels.length > 0) {
-      printDebugMsg('MFC', myMfcModels.length  + ' model(s) to capture');
-      return Promise.all(myMfcModels.map(createMfcCaptureProcess));
+  //common.dbgMsg(site, 'Launching ffmpeg ' + spawnArgs);
+  var captureProcess = childProcess.spawn('ffmpeg', spawnArgs);
+
+  captureProcess.stdout.on('data', function(data) {
+    common.msg(site, data);
+  });
+
+  captureProcess.stderr.on('data', function(data) {
+    common.msg(site, data);
+  });
+
+  captureProcess.on('error', function(err) {
+    common.dbgMsg(site, err);
+  });
+
+  captureProcess.on('close', function() {
+    if (tryingToExit) {
+      process.stdout.write(colors.site(common.getSiteName(site)) + ' ' + colors.model(nm) + ' capture interrupted\n' + colors.time('[' + common.getDateTime() + '] '));
     } else {
-      return;
+      common.msg(site, colors.model(nm) + ' stopped streaming');
     }
-  })
-  .catch(function(err) {
-    printErrorMsg('MFC', err);
-  })
-  .finally(function() {
-    printMsg('MFC', 'Done, will search for new models in ' + config.modelScanInterval + ' second(s).');
-    setTimeout(mainMfcLoop, config.modelScanInterval * 1000);
+
+    fs.stat(config.captureDirectory + '/' + filename + '.ts', function(err, stats) {
+      if (err) {
+        if (err.code == 'ENOENT') {
+          if (tryingToExit) {
+            process.stdout.write(colors.site(common.getSiteName(site)) + ' ' + colors.error('[ERROR] ') + colors.model(nm) + ': ' + filename + '.ts not found in capturing directory, cannot convert to ' + config.autoConvertType);
+          } else {
+            common.errMsg(site, colors.model(nm) + ': ' + filename + '.ts not found in capturing directory, cannot convert to ' + config.autoConvertType);
+          }
+        } else {
+          if (tryingToExit) {
+            process.stdout.write(colors.site(common.getSiteName(site)) + ' ' + colors.error('[ERROR] ') + colors.model(nm) + ': ' +err.toString());
+          } else {
+            common.errMsg(site, colors.model(nm) + ': ' + err.toString());
+          }
+        }
+      } else if (stats.size === 0) {
+        fs.unlink(config.captureDirectory + '/' + filename + '.ts');
+      } else {
+        postProcess(filename);
+      }
+    });
+
+    removeModelFromCapList(site, model);
   });
+
+  if (!!captureProcess.pid) {
+    switch (site) {
+      case MFC: site.addModelToCapList(model.uid, filename, captureProcess.pid); break;
+      case CB:  site.addModelToCapList(model,     filename, captureProcess.pid); break;
+    }
+  }
 }
 
-function mainCbLoop() {
-  printDebugMsg('CB ', 'Start searching for new models');
+function mainSiteLoop(site) {
+  common.dbgMsg(site, 'Start searching for new models');
 
   Promise.try(function() {
-    return getCbOnlineModels(1);
+    return site.getOnlineModels();
   })
   .then(function(onlineModels) {
-    return selectCbMyModels(onlineModels);
+    common.msg(site, onlineModels.length  + ' model(s) online');
+    return getModelsToCap(site, onlineModels);
   })
-  .then(function(myModels) {
-    if (myModels != null) {
-      return Promise.all(myModels.map(createCbCaptureProcess));
+  .then(function(modelsToCap) {
+    if (modelsToCap !== null) {
+      if (modelsToCap.length > 0) {
+        common.dbgMsg(site, modelsToCap.length + ' model(s) to capture');
+        var caps = [];
+        for (var i = 0; i < modelsToCap.length; i++) {
+          var cap = site.setupCapture(modelsToCap[i], tryingToExit).then(function(jobs) {
+            for (var j = 0; j < jobs.length; j++) {
+              if (jobs[j].spawnArgs !== '') {
+                startCapture(site, jobs[j].spawnArgs, jobs[j].filename, jobs[j].model);
+              }
+            }
+          });
+          caps.push(cap);
+        }
+        return Promise.all(caps);
+      } else {
+        return;
+      }
     } else {
       return;
     }
   })
   .catch(function(err) {
-    printErrorMsg('CB ', err);
+    common.errMsg(site, err);
   })
   .finally(function() {
-    printMsg('CB ', 'Done, will search for new models in ' + config.modelScanInterval + ' second(s).');
-    setTimeout(mainCbLoop, config.modelScanInterval * 1000);
+    common.msg(site, 'Done, will search for new models in ' + config.modelScanInterval + ' second(s).');
+    setTimeout(function() { mainSiteLoop(site); }, config.modelScanInterval * 1000);
   });
 }
-
-var semaphore = 0; // Counting semaphore
-var tryingToExit = 0;
-var mfcGuest;
-var myMfcModels = [];
-var mfcModelsCurrentlyCapturing = new Array();
-var mfcFilesCurrentlyCapturing = new Array();
-var cbModelsCurrentlyCapturing = new Array();
-var cbFilesCurrentlyCapturing = new Array();
-
-var config = yaml.safeLoad(fs.readFileSync('config.yml', 'utf8'));
-
-config.captureDirectory = path.resolve(config.captureDirectory);
-config.completeDirectory = path.resolve(config.completeDirectory);
-
-initColors();
 
 mkdirp(config.captureDirectory, function(err) {
   if (err) {
-    printErrorMsg('', err);
+    common.errMsg(null, err);
     process.exit(1);
   }
 });
 
 mkdirp(config.completeDirectory, function(err) {
   if (err) {
-    printErrorMsg('', err);
+    common.errMsg(null, err);
     process.exit(1);
   }
 });
@@ -734,15 +466,21 @@ function tryExit() {
   // SIGINT will get passed to any running ffmpeg captures.
   // Must delay exiting until the capture and postProcess
   // for all models have finished.  Keep checking every 1s
-  if (semaphore == 0 && mfcFilesCurrentlyCapturing.length == 0 && cbFilesCurrentlyCapturing.length == 0) {
+  var capsInProgress = 0;
+  for (var i = 0; i < SITES.length; i++) {
+    capsInProgress += SITES[i].getNumCapsInProgress();
+  }
+  if (semaphore === 0 && capsInProgress === 0) {
     process.stdout.write('\n');
-    mfcGuest.disconnect();
+    if (config.enableMFC) {
+      MFC.disconnect();
+    }
     process.exit(0);
   } else {
     sleep(1000).then(() => {
       tryExit(); // recursion!
-      // periodically print something so it is more
-      // obvious that the script is not hung
+      // periodically print something so it is more obvious
+      // that the script is not hung while waiting on ffmpeg
       process.stdout.write('.');
     });
   }
@@ -752,28 +490,33 @@ process.on('SIGINT', function() {
   // Prevent bad things from happening if user holds down ctrl+c
   if (!tryingToExit) {
     tryingToExit = 1;
-    if (semaphore > 0 || mfcFilesCurrentlyCapturing.length > 0 || cbFilesCurrentlyCapturing.length > 0) {
+    var capsInProgress = 0;
+    for (var i = 0; i < SITES.length; i++) {
+      capsInProgress += SITES[i].getNumCapsInProgress();
+    }
+    if (semaphore > 0 || capsInProgress > 0) {
       // extra newline to avoid ^C
       process.stdout.write('\n');
-      printMsg('', 'Waiting for ' + (mfcFilesCurrentlyCapturing.length + cbFilesCurrentlyCapturing.length) + ' capture stream(s) to end.');
-      process.stdout.write(colors.time('[' + getCurrentDateTime() + '] ')); // log beautification
+      common.msg(null, 'Waiting for ' + capsInProgress + ' capture stream(s) to end.');
+      process.stdout.write(colors.time('[' + common.getDateTime() + '] ')); // log beautification
     }
     tryExit();
   }
-})
+});
 
 if (config.enableMFC) {
-  mfcGuest = new mfc.Client();
+  MFC.create(MFC);
   Promise.try(function() {
-    return mfcGuest.connectAndWaitForModels();
+    return MFC.connect();
   }).then(function() {
-    mainMfcLoop();
+    mainSiteLoop(MFC);
   }).catch(function(err) {
-    printErrorMsg('MFC', err);
+    common.errMsg(MFC, err);
   });
 }
 
 if (config.enableCB) {
-  mainCbLoop();
+  CB.create(CB);
+  mainSiteLoop(CB);
 }
 

@@ -14,8 +14,19 @@ includeSiteInFile: true
 enableMFC: true
 enableCB: true
 mfcmodels:
+<<<<<<< HEAD
   - 3623822  # LaceyBlack
   - 12513225 # CodiLake
 cbmodels:
   - aynmarie
   - theemilygrey
+=======
+  - 3623822
+  - 12513225
+  - 15761593
+  - 4585086
+cbmodels:
+  - aynmarie
+  - theemilygrey
+  - katyandmax
+>>>>>>> development
