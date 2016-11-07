@@ -112,8 +112,8 @@ module.exports = {
     me = myself;
   },
 
-  getOnlineModels: function(page) {
-    return getOnlineModels(page);
+  getOnlineModels: function() {
+    return getOnlineModels(1);
   },
 
   addModelToCapList: function(nm, filename, pid) {
