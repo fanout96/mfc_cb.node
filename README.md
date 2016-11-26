@@ -19,9 +19,9 @@ This is a Node.JS application, so it works anywhere that Node.JS does.
 
 * Captures are named in the format model_site_datetime.[mp4|mkv]
 
-..* datetime format can be controlled in the config file
+  * datetime format can be controlled in the config file
 
-..* site is optional and can be disabled in the config file
+  * site is optional and can be disabled in the config file
 
 Setup
 ==========
