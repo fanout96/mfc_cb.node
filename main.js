@@ -132,7 +132,9 @@ function addModels(site, bundle) {
       var queries = [];
       for (i = 0; i < bundle.includeModels.length; i++) {
         var query = MFC.queryUser(bundle.includeModels[i]).then((model) => {
-          bundle.dirty |= addModel(site, model);
+          if (typeof model !== 'undefined') {
+            bundle.dirty |= addModel(site, model);
+          }
         });
         queries.push(query);
       }
@@ -182,7 +184,9 @@ function removeModels(site, bundle) {
       var queries = [];
       for (i = 0; i < bundle.excludeModels.length; i++) {
         var query = MFC.queryUser(bundle.excludeModels[i]).then((model) => {
-          bundle.dirty |= removeModel(site, model);
+          if (typeof model !== 'undefined') {
+            bundle.dirty |= removeModel(site, model);
+          }
         });
         queries.push(query);
       }

@@ -35,7 +35,7 @@ function isCurrentlyCapping(nm, kill) {
 
 function getOnlineModels(page) {
   return Promise.try(function() {
-    return session.get('https://chaturbate.com/followed-cams/?page=' + page);
+    return session.get('https://chaturbate.com/?page=' + page);
   }).then(function(response) {
 
     var $ = cheerio.load(response.body);
@@ -107,6 +107,7 @@ function getStream(nm) {
     common.errMsg(me, colors.model(nm) + ': ' + err.toString());
   });
 }
+
 module.exports = {
   create: function(myself) {
     me = myself;
