@@ -26,7 +26,7 @@ This is a Node.JS application, so it works anywhere that Node.JS does.
 Setup
 ==========
 
-* Dependencies: node.js 7.0, npm, and ffmpeg
+* Dependencies: node.js >= 7.0, npm, and ffmpeg
 
 * Install mfc_cb.node
   >On GitHub, click `Clone or download`, `Download ZIP`.

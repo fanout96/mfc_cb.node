@@ -47,7 +47,6 @@ module.exports = {
     return filename;
   },
 
-  //setSites: function(mfcSite, cbSite, ifSite) {
   setSites: function(mfcSite, cbSite) {
     MFC = mfcSite;
     CB = cbSite;
@@ -55,11 +54,11 @@ module.exports = {
 
   initColors: function() {
     colors.setTheme({
-      model: config.modelcolor, //'magenta',
-      time:  config.timecolor,  //'grey',
-      site:  config.sitecolor,  //'green',
-      debug: config.debugcolor, //'yellow',
-      error: config.errorcolor, // 'red',
+      model: config.modelcolor,
+      time:  config.timecolor,
+      site:  config.sitecolor,
+      debug: config.debugcolor,
+      error: config.errorcolor,
     });
   },
 
@@ -70,12 +69,6 @@ module.exports = {
       'fatal',
       '-i',
       url,
-      // TODO: Some models get AV sync issues after a long time of recording.
-      //       Will experiment with a per-model option to enable ffmpeg audio
-      //       resampling to try and correct for sync issues.
-      //'-af',
-      //'aresample=async=1',
-      //'-vcodec',
       '-c',
       'copy',
       config.captureDirectory + '/' + filename + '.ts'
