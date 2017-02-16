@@ -20,17 +20,16 @@ function removeModelFromCapList(nm) {
   }
 }
 
-function isCurrentlyCapping(nm, kill) {
+function haltCapture(nm) {
   for (var i = 0; i < currentlyCapping.length; i++) {
     if (currentlyCapping[i].nm == nm) {
-      if (kill === 1) {
-        process.kill(currentlyCapping[i].pid, 'SIGINT');
-        removeModelFromCapList(nm);
-      }
-      return true;
+      process.kill(currentlyCapping[i].pid, 'SIGINT');
+      removeModelFromCapList(nm);
+      common.dbgMsg(me, colors.model(uid) + ' is offline, but ffmpeg is still capping. Sending SIGINT to end capture');
+      return;
     }
   }
-  return false;
+  return;
 }
 
 function getOnlineModels(page) {
@@ -97,6 +96,7 @@ function getStream(nm) {
 
     if (streamData !== null) {
       url = streamData[1];
+      common.dbgMsg(me, 'url = ' + url);
     } else {
       common.errMsg(me, nm + ' is offline');
     }
