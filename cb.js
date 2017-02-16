@@ -25,7 +25,7 @@ function haltCapture(nm) {
     if (currentlyCapping[i].nm == nm) {
       process.kill(currentlyCapping[i].pid, 'SIGINT');
       removeModelFromCapList(nm);
-      common.dbgMsg(me, colors.model(uid) + ' is offline, but ffmpeg is still capping. Sending SIGINT to end capture');
+      common.dbgMsg(me, colors.model(nm) + ' is offline, but ffmpeg is still capping. Sending SIGINT to end capture');
       return;
     }
   }
@@ -130,14 +130,9 @@ module.exports = {
     return currentlyCapping.length;
   },
 
-  isCurrentlyCapping: function(nm) {
-    return isCurrentlyCapping(nm, 0);
-  },
-
-  stopCapping: function(nm) {
-    if (isCurrentlyCapping(nm, 1)) {
-        common.dbgMsg(me, 'removed from capture list, ending ffmpeg process');
-    }
+  haltCapture: function(nm) {
+    haltCapture(nm);
+    return;
   },
 
   setupCapture: function(nm, tryingToExit) {
