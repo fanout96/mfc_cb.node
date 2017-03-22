@@ -10,16 +10,27 @@ var modelsToCap = [];
 var currentlyCapping = [];
 var me; // backpointer for common print methods
 
-function isCurrentlyCapping(uid, kill) {
+function removeModelFromCapList(uid) {
   for (var i = 0; i < currentlyCapping.length; i++) {
     if (currentlyCapping[i].uid == uid) {
-      if (kill === 1) {
-        process.kill(currentlyCapping[i].pid, 'SIGINT');
-      }
-      return true;
+      currentlyCapping.splice(i, 1);
+      return;
     }
   }
-  return false;
+  return;
+}
+
+function haltCapture(uid) {
+  for (var i = 0; i < currentlyCapping.length; i++) {
+    if (currentlyCapping[i].uid == uid) {
+      process.kill(currentlyCapping[i].pid, 'SIGINT');
+      removeModelFromCapList(uid);
+      // TODO: Print name not uid.
+      common.dbgMsg(me, colors.model(uid) + ' is offline, but ffmpeg is still capping. Sending SIGINT to end capture');
+      return;
+    }
+  }
+  return;
 }
 
 module.exports = {
@@ -80,14 +91,9 @@ module.exports = {
     modelsToCap = [];
   },
 
-  isCurrentlyCapping: function(uid) {
-    return isCurrentlyCapping(uid, 0);
-  },
-
-  stopCapping: function(uid) {
-    if (isCurrentlyCapping(uid, 1)) {
-        common.dbgMsg(me, 'removed from capture list, ending ffmpeg process');
-    }
+  haltCapture: function(uid) {
+    haltCapture(uid);
+    return;
   },
 
   checkModelState: function(uid) {
@@ -113,9 +119,7 @@ module.exports = {
         } else if (model.vs === mfc.STATE.Offline) {
           // Sometimes the ffmpeg process doesn't end when a model
           // logs off, but we can detect that and stop the capture
-          if (isCurrentlyCapping(uid, 1)) {
-            common.dbgMsg(me, colors.model(model.nm) + ' is offline, but ffmpeg is still capping. Sending SIGINT to end capture');
-          }
+          haltCapture(uid);
         }
       }
       return true;
@@ -131,12 +135,7 @@ module.exports = {
   },
 
   removeModelFromCapList: function(uid) {
-    for (var i = 0; i < currentlyCapping.length; i++) {
-      if (currentlyCapping[i].uid == uid) {
-        currentlyCapping.splice(i, 1);
-        return;
-      }
-    }
+    removeModelFromCapList(uid);
   },
 
   getNumCapsInProgress: function() {

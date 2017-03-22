@@ -8,6 +8,7 @@
     "loopfunc"   : true,
     "quotmark"   : true,
     "unused"     : true,
+    "undef"      : true,
 
     "node"       : true,
     "esversion"  : 6

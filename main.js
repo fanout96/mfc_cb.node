@@ -4,6 +4,7 @@ require('events').EventEmitter.prototype._maxListeners = 100;
 // Load 3rd Party Libraries
 var Promise      = require('bluebird');
 var fs           = require('fs');
+var mv           = require('mv');
 var yaml         = require('js-yaml');
 var mkdirp       = require('mkdirp');
 var colors       = require('colors/safe');
@@ -163,9 +164,7 @@ function removeModel(site, model) {
   }
 
   common.msg(site, colors.model(nm) + colors.italic(' removed') + ' from capture list.');
-  if (site.isCurrentlyCapping(match)) {
-    site.stopCapping(match);
-  }
+  site.haltCapture(match);
 
   switch (site) {
     case MFC: config.mfcmodels = _.without(config.mfcmodels, model.uid); break;
@@ -272,7 +271,7 @@ function removeModelFromCapList(site, model) {
 function postProcess(filename) {
   if (config.autoConvertType !== 'mp4' && config.autoConvertType !== 'mkv') {
     common.dbgMsg(null, 'Moving ' + config.captureDirectory + '/' + filename + '.ts to ' + config.completeDirectory + '/' + filename + '.ts');
-    fs.rename(config.captureDirectory + '/' + filename + '.ts', config.completeDirectory + '/' + filename + '.ts', function(err) {
+    mv(config.captureDirectory + '/' + filename + '.ts', config.completeDirectory + '/' + filename + '.ts', function(err) {
       if (err) {
         common.errMsg(null, colors.site(filename) + ': ' + err.toString());
       }
@@ -417,8 +416,12 @@ function mainSiteLoop(site) {
     return site.getOnlineModels();
   })
   .then(function(onlineModels) {
-    common.msg(site, onlineModels.length  + ' model(s) online');
-    return getModelsToCap(site, onlineModels);
+    if (typeof onlineModels !== 'undefined') {
+      common.msg(site, onlineModels.length  + ' model(s) online');
+      return getModelsToCap(site, onlineModels);
+    } else {
+      return null;
+    }
   })
   .then(function(modelsToCap) {
     if (modelsToCap !== null) {
