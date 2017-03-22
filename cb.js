@@ -96,7 +96,7 @@ function getStream(nm) {
 
     if (streamData !== null) {
       url = streamData[1];
-      common.dbgMsg(me, 'url = ' + url);
+      //common.dbgMsg(me, 'url = ' + url);
     } else {
       common.errMsg(me, nm + ' is offline');
     }
