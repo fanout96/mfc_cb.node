@@ -329,7 +329,9 @@ function postProcess(filename) {
   });
 
   myCompleteProcess.on('close', function() {
-    fs.unlink(config.captureDirectory + '/' + filename + '.ts');
+    if (!config.keepTsFile) {
+      fs.unlink(config.captureDirectory + '/' + filename + '.ts');
+    }
     // For debug, to keep disk from filling during active testing
     if (config.autoDelete) {
       if (tryingToExit) {
