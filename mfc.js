@@ -4,6 +4,7 @@ var Promise = require('bluebird');
 var colors  = require('colors/safe');
 var mfc     = require('MFCAuto');
 var common  = require('./common');
+var fs      = require('fs');
 
 var mfcGuest;
 var modelsToCap = [];
@@ -140,6 +141,32 @@ module.exports = {
 
   getNumCapsInProgress: function() {
     return currentlyCapping.length;
+  },
+
+  checkFileSize: function(captureDirectory, maxByteSize) {
+    if (maxByteSize > 0) {
+      var removeList = [];
+      for (var i = 0; i < currentlyCapping.length; i++) {
+        var filename = currentlyCapping[i].filename;
+        var pid = currentlyCapping[i].pid;
+        var uid = currentlyCapping[i].uid;
+        fs.stat(captureDirectory + '/' + filename + '.ts', function(err, stats) {
+          if (err) {
+            common.errMsg(me, 'Unexpected error checking size of ' + filename);
+          } else {
+            common.dbgMsg(me, 'Checking file size for ' + filename + '.  size=' + stats.size + ', maxByteSize=' + maxByteSize);
+            if (stats.size > maxByteSize) {
+              common.dbgMsg(me, 'Ending capture');
+              process.kill(pid, 'SIGINT');
+              removeList.push(uid);
+            }
+          }
+        });
+      }
+      for (var j = 0; j < removeList.length; j++) {
+        removeModelFromCapList(removeList[j]);
+      }
+    }
   },
 
   setupCapture: function(model, tryingToExit) {

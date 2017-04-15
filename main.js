@@ -415,6 +415,9 @@ function mainSiteLoop(site) {
   common.dbgMsg(site, 'Start searching for new models');
 
   Promise.try(function() {
+    site.checkFileSize(config.captureDirectory, config.maxByteSize);
+  })
+  .then(function() {
     return site.getOnlineModels();
   })
   .then(function(onlineModels) {
