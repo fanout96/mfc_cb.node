@@ -140,23 +140,15 @@ module.exports = {
     if (maxByteSize > 0) {
       var removeList = [];
       for (var i = 0; i < currentlyCapping.length; i++) {
-        var filename = currentlyCapping[i].filename;
-        var pid = currentlyCapping[i].pid;
-        var nm = currentlyCapping[i].nm;
-        fs.stat(captureDirectory + '/' + filename + '.ts', function(err, stats) {
-          if (err) {
-            common.errMsg(me, 'Unexpected error checking size of ' + filename);
-          } else {
-            common.dbgMsg(me, 'Checking file size for ' + filename + '.  size=' + stats.size + ', maxByteSize=' + maxByteSize);
-            if (stats.size > maxByteSize) {
-              common.dbgMsg(me, 'Ending capture');
-              process.kill(pid, 'SIGINT');
-              removeList.push(nm);
-            }
-          }
-        });
+        var stat = fs.statSync(captureDirectory + '/' + currentlyCapping[i].filename + '.ts');
+        common.dbgMsg(me, 'Checking file size for ' + currentlyCapping[i].filename + '.  size=' + stat.size + ', maxByteSize=' + maxByteSize);
+        if (stat.size > maxByteSize) {
+          common.dbgMsg(me, 'Ending capture');
+          process.kill(currentlyCapping[i].pid, 'SIGINT');
+          removeList.push(currentlyCapping[i].nm);
+        }
       }
-      for (var j = 0; i < removeList.length; j++) {
+      for (var j = 0; j < removeList.length; j++) {
         removeModelFromCapList(removeList[j]);
       }
     }
