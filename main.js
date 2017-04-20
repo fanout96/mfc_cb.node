@@ -359,18 +359,6 @@ function startCapture(site, spawnArgs, filename, model) {
   //common.dbgMsg(site, 'Launching ffmpeg ' + spawnArgs);
   var captureProcess = childProcess.spawn('ffmpeg', spawnArgs);
 
-  captureProcess.stdout.on('data', function(data) {
-    common.msg(site, data);
-  });
-
-  captureProcess.stderr.on('data', function(data) {
-    common.msg(site, data);
-  });
-
-  captureProcess.on('error', function(err) {
-    common.dbgMsg(site, err);
-  });
-
   captureProcess.on('close', function() {
     if (tryingToExit) {
       process.stdout.write(colors.site(common.getSiteName(site)) + ' ' + colors.model(nm) + ' capture interrupted\n' + colors.time('[' + common.getDateTime() + '] '));
@@ -412,7 +400,7 @@ function startCapture(site, spawnArgs, filename, model) {
 }
 
 function mainSiteLoop(site) {
-  common.dbgMsg(site, 'Start searching for new models');
+  //common.dbgMsg(site, 'Start searching for new models');
 
   Promise.try(function() {
     site.checkFileSize(config.captureDirectory, config.maxByteSize);
@@ -422,7 +410,7 @@ function mainSiteLoop(site) {
   })
   .then(function(onlineModels) {
     if (typeof onlineModels !== 'undefined') {
-      common.msg(site, onlineModels.length  + ' model(s) online');
+      //common.msg(site, onlineModels.length  + ' model(s) online');
       return getModelsToCap(site, onlineModels);
     } else {
       return null;

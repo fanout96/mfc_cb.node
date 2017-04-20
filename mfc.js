@@ -43,7 +43,7 @@ module.exports = {
 
   connect: function() {
     return Promise.try(function() {
-      return mfcGuest.connectAndWaitForModels();
+      return mfcGuest.connect(true);
     }).catch(function(err) {
       return err;
     });
