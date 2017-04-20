@@ -3,6 +3,8 @@ completeDirectory: captured
 modelScanInterval: 300
 autoConvertType: mp4
 autoDelete: false
+keepTsFile: false
+maxByteSize: 0
 dateFormat: YYYYMMDD-HHmmss
 debug: true
 modelcolor: magenta

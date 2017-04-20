@@ -329,7 +329,9 @@ function postProcess(filename) {
   });
 
   myCompleteProcess.on('close', function() {
-    fs.unlink(config.captureDirectory + '/' + filename + '.ts');
+    if (!config.keepTsFile) {
+      fs.unlink(config.captureDirectory + '/' + filename + '.ts');
+    }
     // For debug, to keep disk from filling during active testing
     if (config.autoDelete) {
       if (tryingToExit) {
@@ -356,18 +358,6 @@ function startCapture(site, spawnArgs, filename, model) {
 
   //common.dbgMsg(site, 'Launching ffmpeg ' + spawnArgs);
   var captureProcess = childProcess.spawn('ffmpeg', spawnArgs);
-
-  captureProcess.stdout.on('data', function(data) {
-    common.msg(site, data);
-  });
-
-  captureProcess.stderr.on('data', function(data) {
-    common.msg(site, data);
-  });
-
-  captureProcess.on('error', function(err) {
-    common.dbgMsg(site, err);
-  });
 
   captureProcess.on('close', function() {
     if (tryingToExit) {
@@ -410,14 +400,17 @@ function startCapture(site, spawnArgs, filename, model) {
 }
 
 function mainSiteLoop(site) {
-  common.dbgMsg(site, 'Start searching for new models');
+  //common.dbgMsg(site, 'Start searching for new models');
 
   Promise.try(function() {
+    site.checkFileSize(config.captureDirectory, config.maxByteSize);
+  })
+  .then(function() {
     return site.getOnlineModels();
   })
   .then(function(onlineModels) {
     if (typeof onlineModels !== 'undefined') {
-      common.msg(site, onlineModels.length  + ' model(s) online');
+      //common.msg(site, onlineModels.length  + ' model(s) online');
       return getModelsToCap(site, onlineModels);
     } else {
       return null;

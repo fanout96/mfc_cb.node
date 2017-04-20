@@ -5,6 +5,7 @@ var colors  = require('colors/safe');
 var bhttp   = require('bhttp');
 var cheerio = require('cheerio');
 var common  = require('./common');
+var fs      = require('fs');
 
 var session = bhttp.session();
 var me; // backpointer for common printing methods
@@ -133,6 +134,24 @@ module.exports = {
   haltCapture: function(nm) {
     haltCapture(nm);
     return;
+  },
+
+  checkFileSize: function(captureDirectory, maxByteSize) {
+    if (maxByteSize > 0) {
+      var removeList = [];
+      for (var i = 0; i < currentlyCapping.length; i++) {
+        var stat = fs.statSync(captureDirectory + '/' + currentlyCapping[i].filename + '.ts');
+        common.dbgMsg(me, 'Checking file size for ' + currentlyCapping[i].filename + '.  size=' + stat.size + ', maxByteSize=' + maxByteSize);
+        if (stat.size > maxByteSize) {
+          common.dbgMsg(me, 'Ending capture');
+          process.kill(currentlyCapping[i].pid, 'SIGINT');
+          removeList.push(currentlyCapping[i].nm);
+        }
+      }
+      for (var j = 0; j < removeList.length; j++) {
+        removeModelFromCapList(removeList[j]);
+      }
+    }
   },
 
   setupCapture: function(nm, tryingToExit) {
