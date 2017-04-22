@@ -207,39 +207,39 @@ function removeModels(site, bundle) {
   return;
 }
 
-function writeConfig(site, onlineModels, dirty) {
+function writeConfig(site, dirty) {
   if (dirty) {
     common.dbgMsg(site, 'Rewriting config.yml');
     fs.writeFileSync('config.yml', yaml.safeDump(config), 'utf8');
   }
 
-  var modelsToCap = [];
   switch (site) {
     case MFC:
-      MFC.clearMyModels();
+      site.clearMyModels();
       return Promise.all(config.mfcmodels.map(MFC.checkModelState))
       .then(function() {
-        return MFC.getModelsToCap();
+        return site.getModelsToCap();
       })
       .catch(function(err) {
         common.errMsg(site, err.toString());
       });
 
     case CB:
-      _.each(config.cbmodels, function(nm) {
-        var modelIndex = onlineModels.indexOf(nm);
-        if (modelIndex !== -1) {
-          modelsToCap.push(nm);
-        }
+      return Promise.all(site.getOnlineModels())
+      .then(function(onlineModels) {
+        var modelsToCap = [];
+        _.each(config.cbmodels, function(nm) {
+          var modelIndex = onlineModels.indexOf(nm);
+          if (modelIndex !== -1) {
+            modelsToCap.push(nm);
+          }
+        });
+        return modelsToCap;
       });
-      return modelsToCap;
   }
 }
 
-function getModelsToCap(site, onlineModels) {
-  if (onlineModels === null) {
-    return;
-  }
+function getModelsToCap(site) {
   return Promise.try(function() {
     return processUpdates(site);
   })
@@ -250,7 +250,7 @@ function getModelsToCap(site, onlineModels) {
     return removeModels(site, bundle);
   })
   .then(function(dirty) {
-    return writeConfig(site, onlineModels, dirty);
+    return writeConfig(site, dirty);
   })
   .catch(function(err) {
     common.errMsg(site, err);
@@ -311,26 +311,16 @@ function postProcess(filename) {
   semaphore++;
 
   if (tryingToExit) {
-    if (config.debug) {
-      process.stdout.write(colors.debug('[DEBUG]') + ' Converting ' + filename + '.ts to ' + filename + '.' + config.autoConvertType + '\n' + colors.time('[' + common.getDateTime() + '] '));
-    }
+    process.stdout.write('Converting ' + filename + '.ts to ' + filename + '.' + config.autoConvertType + '\n' + colors.time('[' + common.getDateTime() + '] '));
   } else {
-    common.dbgMsg(null, 'Converting ' + filename + '.ts to ' + filename + '.' + config.autoConvertType);
+    common.msg(null, 'Converting ' + filename + '.ts to ' + filename + '.' + config.autoConvertType);
   }
 
   var myCompleteProcess = childProcess.spawn('ffmpeg', mySpawnArguments);
 
-  myCompleteProcess.stdout.on('data', function(data) {
-    common.msg(null, data);
-  });
-
-  myCompleteProcess.stderr.on('data', function(data) {
-    common.msg(null, data);
-  });
-
   myCompleteProcess.on('close', function() {
     if (!config.keepTsFile) {
-      fs.unlink(config.captureDirectory + '/' + filename + '.ts');
+      fs.unlinkSync(config.captureDirectory + '/' + filename + '.ts');
     }
     // For debug, to keep disk from filling during active testing
     if (config.autoDelete) {
@@ -339,7 +329,7 @@ function postProcess(filename) {
       } else {
         common.errMsg(null, 'Deleting ' + filename + '.' + config.autoConvertType);
       }
-      fs.unlink(config.completeDirectory + '/' + filename + '.' + config.autoConvertType);
+      fs.unlinkSync(config.completeDirectory + '/' + filename + '.' + config.autoConvertType);
     }
     semaphore--; // release semaphore only when ffmpeg process has ended
   });
@@ -366,6 +356,8 @@ function startCapture(site, spawnArgs, filename, model) {
       common.msg(site, colors.model(nm) + ' stopped streaming');
     }
 
+    removeModelFromCapList(site, model);
+
     fs.stat(config.captureDirectory + '/' + filename + '.ts', function(err, stats) {
       if (err) {
         if (err.code == 'ENOENT') {
@@ -382,13 +374,11 @@ function startCapture(site, spawnArgs, filename, model) {
           }
         }
       } else if (stats.size === 0) {
-        fs.unlink(config.captureDirectory + '/' + filename + '.ts');
+        fs.unlinkSync(config.captureDirectory + '/' + filename + '.ts');
       } else {
         postProcess(filename);
       }
     });
-
-    removeModelFromCapList(site, model);
   });
 
   if (!!captureProcess.pid) {
@@ -400,21 +390,12 @@ function startCapture(site, spawnArgs, filename, model) {
 }
 
 function mainSiteLoop(site) {
-  //common.dbgMsg(site, 'Start searching for new models');
 
   Promise.try(function() {
     site.checkFileSize(config.captureDirectory, config.maxByteSize);
   })
   .then(function() {
-    return site.getOnlineModels();
-  })
-  .then(function(onlineModels) {
-    if (typeof onlineModels !== 'undefined') {
-      //common.msg(site, onlineModels.length  + ' model(s) online');
-      return getModelsToCap(site, onlineModels);
-    } else {
-      return null;
-    }
+    return getModelsToCap(site);
   })
   .then(function(modelsToCap) {
     if (modelsToCap !== null) {
@@ -422,11 +403,9 @@ function mainSiteLoop(site) {
         common.dbgMsg(site, modelsToCap.length + ' model(s) to capture');
         var caps = [];
         for (var i = 0; i < modelsToCap.length; i++) {
-          var cap = site.setupCapture(modelsToCap[i], tryingToExit).then(function(jobs) {
-            for (var j = 0; j < jobs.length; j++) {
-              if (jobs[j].spawnArgs !== '') {
-                startCapture(site, jobs[j].spawnArgs, jobs[j].filename, jobs[j].model);
-              }
+          var cap = site.setupCapture(modelsToCap[i], tryingToExit).then(function(bundle) {
+            if (bundle.spawnArgs !== '') {
+              startCapture(site, bundle.spawnArgs, bundle.filename, bundle.model);
             }
           });
           caps.push(cap);
@@ -443,7 +422,7 @@ function mainSiteLoop(site) {
     common.errMsg(site, err);
   })
   .finally(function() {
-    common.msg(site, 'Done, will search for new models in ' + config.modelScanInterval + ' second(s).');
+    common.msg(site, 'Done, waiting ' + config.modelScanInterval + ' seconds.');
     setTimeout(function() { mainSiteLoop(site); }, config.modelScanInterval * 1000);
   });
 }

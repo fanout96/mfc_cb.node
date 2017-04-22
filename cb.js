@@ -21,18 +21,6 @@ function removeModelFromCapList(nm) {
   }
 }
 
-function haltCapture(nm) {
-  for (var i = 0; i < currentlyCapping.length; i++) {
-    if (currentlyCapping[i].nm == nm) {
-      process.kill(currentlyCapping[i].pid, 'SIGINT');
-      removeModelFromCapList(nm);
-      common.dbgMsg(me, colors.model(nm) + ' is offline, but ffmpeg is still capping. Sending SIGINT to end capture');
-      return;
-    }
-  }
-  return;
-}
-
 function getOnlineModels(page) {
   return Promise.try(function() {
     return session.get('https://chaturbate.com/?page=' + page);
@@ -132,26 +120,17 @@ module.exports = {
   },
 
   haltCapture: function(nm) {
-    haltCapture(nm);
+    for (var i = 0; i < currentlyCapping.length; i++) {
+      if (currentlyCapping[i].nm == nm) {
+        process.kill(currentlyCapping[i].pid, 'SIGINT');
+        return;
+      }
+    }
     return;
   },
 
   checkFileSize: function(captureDirectory, maxByteSize) {
-    if (maxByteSize > 0) {
-      var removeList = [];
-      for (var i = 0; i < currentlyCapping.length; i++) {
-        var stat = fs.statSync(captureDirectory + '/' + currentlyCapping[i].filename + '.ts');
-        common.dbgMsg(me, 'Checking file size for ' + currentlyCapping[i].filename + '.  size=' + stat.size + ', maxByteSize=' + maxByteSize);
-        if (stat.size > maxByteSize) {
-          common.dbgMsg(me, 'Ending capture');
-          process.kill(currentlyCapping[i].pid, 'SIGINT');
-          removeList.push(currentlyCapping[i].nm);
-        }
-      }
-      for (var j = 0; j < removeList.length; j++) {
-        removeModelFromCapList(removeList[j]);
-      }
-    }
+    common.checkFileSize(me, captureDirectory, maxByteSize, currentlyCapping);
   },
 
   setupCapture: function(nm, tryingToExit) {
@@ -159,8 +138,7 @@ module.exports = {
       if (currentlyCapping[i].nm == nm) {
         common.dbgMsg(me, colors.model(nm) + ' is already capturing');
         return Promise.try(function() {
-          var bundle = {spawnArgs: '', filename: '', model: ''};
-          return bundle;
+          return {spawnArgs: '', filename: '', model: ''};
         });
       }
     }
@@ -168,23 +146,19 @@ module.exports = {
     if (tryingToExit) {
       common.dbgMsg(me, colors.model(nm) + ' is now online, but capture not started due to ctrl+c');
       return Promise.try(function() {
-        var bundle = {spawnArgs: '', filename: '', model: ''};
-        return bundle;
+        return {spawnArgs: '', filename: '', model: ''};
       });
     }
-
-    common.msg(me, colors.model(nm) + ' is now online, captured started');
 
     return Promise.try(function() {
       return getStream(nm);
     }).then(function (url) {
       var filename = common.getFileName(me, nm);
-      var jobs = [];
       var spawnArgs = common.getCaptureArguments(url, filename);
 
-      var bundle = {spawnArgs: spawnArgs, filename: filename, model: nm};
-      jobs.push(bundle);
-      return jobs;
+      common.msg(me, colors.model(nm) + ', starting ffmpeg capture to ' + filename + '.ts');
+
+      return {spawnArgs: spawnArgs, filename: filename, model: nm};
     })
     .catch(function(err) {
       common.errMsg(me, colors.model(nm) + ' ' + err.toString());

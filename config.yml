@@ -5,14 +5,14 @@ autoConvertType: mp4
 autoDelete: false
 keepTsFile: false
 maxByteSize: 0
-dateFormat: YYYYMMDD-HHmmss
-debug: true
+dateFormat: YYYYMMDD_HHmmss
+debug: false
 modelcolor: magenta
 timecolor: grey
 sitecolor: green
 debugcolor: yellow
 errorcolor: red
-includeSiteInFile: true
+includeSiteInFile: false
 enableMFC: true
 enableCB: true
 mfcmodels:

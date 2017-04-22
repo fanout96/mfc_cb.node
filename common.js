@@ -22,6 +22,32 @@ function getSiteName(site) {
   return name;
 }
 
+function msg(site, msg) {
+  if (site === null) {
+    console.log(colors.time('[' + getDateTime() + ']'), msg);
+  } else {
+    console.log(colors.time('[' + getDateTime() + ']'), colors.site(getSiteName(site)), msg);
+  }
+}
+
+function errMsg(site, msg) {
+  if (site === null) {
+    console.log(colors.time('[' + getDateTime() + ']'), colors.error('[ERROR]'), msg);
+  } else {
+    console.log(colors.time('[' + getDateTime() + ']'), colors.site(getSiteName(site)), colors.error('[ERROR]'), msg);
+  }
+}
+
+function dbgMsg(site, msg) {
+  if (config.debug && msg) {
+    if (site === null) {
+      console.log(colors.time('[' + getDateTime() + ']'), colors.debug('[DEBUG]'), msg);
+    } else {
+      console.log(colors.time('[' + getDateTime() + ']'), colors.site(getSiteName(site)), colors.debug('[DEBUG]'), msg);
+    }
+  }
+}
+
 module.exports = {
   getSiteName,
 
@@ -45,6 +71,19 @@ module.exports = {
       filename = nm + '_' + getDateTime();
     }
     return filename;
+  },
+
+  checkFileSize: function(site, captureDirectory, maxByteSize, currentlyCapping) {
+    if (maxByteSize > 0) {
+      for (var i = 0; i < currentlyCapping.length; i++) {
+        var stat = fs.statSync(captureDirectory + '/' + currentlyCapping[i].filename + '.ts');
+        dbgMsg(site, 'Checking file size for ' + currentlyCapping[i].filename + '.  size=' + stat.size + ', maxByteSize=' + maxByteSize);
+        if (stat.size >= maxByteSize) {
+          msg(site, currentlyCapping[i].filename + '.ts has exceeded the file size limit of ' + maxByteSize + ' bytes, terminating capture');
+          process.kill(currentlyCapping[i].pid, 'SIGINT');
+        }
+      }
+    }
   },
 
   setSites: function(mfcSite, cbSite) {
@@ -76,30 +115,16 @@ module.exports = {
     return spawnArgs;
   },
 
-  msg: function(site, msg) {
-    if (site === null) {
-      console.log(colors.time('[' + getDateTime() + ']'), msg);
-    } else {
-      console.log(colors.time('[' + getDateTime() + ']'), colors.site(getSiteName(site)), msg);
-    }
+  msg: function(site, themsg) {
+    msg(site, themsg);
   },
 
   errMsg: function(site, msg) {
-    if (site === null) {
-      console.log(colors.time('[' + getDateTime() + ']'), colors.error('[ERROR]'), msg);
-    } else {
-      console.log(colors.time('[' + getDateTime() + ']'), colors.site(getSiteName(site)), colors.error('[ERROR]'), msg);
-    }
+    errMsg(site, msg);
   },
 
   dbgMsg: function(site, msg) {
-    if (config.debug && msg) {
-      if (site === null) {
-        console.log(colors.time('[' + getDateTime() + ']'), colors.debug('[DEBUG]'), msg);
-      } else {
-        console.log(colors.time('[' + getDateTime() + ']'), colors.site(getSiteName(site)), colors.debug('[DEBUG]'), msg);
-      }
-    }
+    dbgMsg(site, msg);
   }
 };
 
