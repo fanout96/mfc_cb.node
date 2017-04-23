@@ -35,13 +35,6 @@ function sleep(time) {
 
 // Processes updates.yml and adds or removes models from config.yml
 function processUpdates(site) {
-  var len;
-  switch (site) {
-    case MFC: len = config.mfcmodels.length; break;
-    case CB:  len = config.cbmodels.length;  break;
-  }
-  common.dbgMsg(site, len + ' model(s) in config');
-
   var stats = fs.statSync('updates.yml');
 
   var includeModels = [];
@@ -100,24 +93,23 @@ function processUpdates(site) {
 
 function addModel(site, model) {
   var index;
-  var nm;
 
   switch (site) {
-    case MFC: index = config.mfcmodels.indexOf(model.uid); nm = model.nm; break;
-    case CB:  index = config.cbmodels.indexOf(model);      nm = model;    break;
+    case MFC: index = config.mfcmodels.indexOf(model.uid); break;
+    case CB:  index = config.cbmodels.indexOf(model.uid);  break;
   }
 
   if (index === -1) {
-    common.msg(site, colors.model(nm) + colors.italic(' added') + ' to capture list');
+    common.msg(site, colors.model(model.nm) + colors.italic(' added') + ' to capture list');
 
     switch (site) {
       case MFC: config.mfcmodels.push(model.uid); break;
-      case CB:  config.cbmodels.push(nm);         break;
+      case CB:  config.cbmodels.push(model.uid);  break;
     }
 
     return true;
   } else {
-    common.msg(site, colors.model(nm) + ' is already in the capture list');
+    common.msg(site, colors.model(model.nm) + ' is already in the capture list');
   }
 
   return false;
@@ -146,8 +138,7 @@ function addModels(site, bundle) {
 
     case CB:
       for (i = 0; i < bundle.includeModels.length; i++) {
-        var nm = bundle.includeModels[i];
-        bundle.dirty |= addModel(site, nm);
+        bundle.dirty |= addModel(site, {nm: bundle.includeModels[i], uid: bundle.includeModels[i]});
       }
       return bundle;
   }
@@ -155,20 +146,13 @@ function addModels(site, bundle) {
 }
 
 function removeModel(site, model) {
-  var match;
-  var nm;
 
-  switch (site) {
-    case MFC: match = model.uid; nm = model.nm; break;
-    case CB:  match = model;     nm = model;    break;
-  }
-
-  common.msg(site, colors.model(nm) + colors.italic(' removed') + ' from capture list.');
-  site.haltCapture(match);
+  common.msg(site, colors.model(model.nm) + colors.italic(' removed') + ' from capture list.');
+  site.haltCapture(model.uid);
 
   switch (site) {
     case MFC: config.mfcmodels = _.without(config.mfcmodels, model.uid); break;
-    case CB:  config.cbmodels  = _.without(config.cbmodels,  model);     break;
+    case CB:  config.cbmodels  = _.without(config.cbmodels,  model.uid); break;
   }
 
   return true;
@@ -199,7 +183,7 @@ function removeModels(site, bundle) {
         var nm = bundle.excludeModels[i];
         var index = config.cbmodels.indexOf(nm);
         if (index !== -1) {
-          bundle.dirty |= removeModel(site, nm);
+          bundle.dirty |= removeModel(site, {nm: nm, uid: nm});
         }
       }
       return bundle.dirty;
@@ -212,7 +196,9 @@ function writeConfig(site, dirty) {
     common.dbgMsg(site, 'Rewriting config.yml');
     fs.writeFileSync('config.yml', yaml.safeDump(config), 'utf8');
   }
+}
 
+function getModelsToCap(site) {
   switch (site) {
     case MFC:
       site.clearMyModels();
@@ -231,7 +217,7 @@ function writeConfig(site, dirty) {
         _.each(config.cbmodels, function(nm) {
           var modelIndex = onlineModels.indexOf(nm);
           if (modelIndex !== -1) {
-            modelsToCap.push(nm);
+            modelsToCap.push({nm: nm, uid: nm});
           }
         });
         return modelsToCap;
@@ -239,39 +225,17 @@ function writeConfig(site, dirty) {
   }
 }
 
-function getModelsToCap(site) {
-  return Promise.try(function() {
-    return processUpdates(site);
-  })
-  .then(function(bundle) {
-    return addModels(site, bundle);
-  })
-  .then(function(bundle) {
-    return removeModels(site, bundle);
-  })
-  .then(function(dirty) {
-    return writeConfig(site, dirty);
-  })
-  .catch(function(err) {
-    common.errMsg(site, err);
-  });
-}
+function postProcess(filename, nm) {
+  var modelDir = config.completeDirectory;
 
-function removeModelFromCapList(site, model) {
-  var index;
-
-  switch (site) {
-    case MFC: index = model.uid; break;
-    case CB:  index = model;     break;
+  if (config.modelSubdir) {
+    modelDir = modelDir + '/' + nm;
+    mkdirp.sync(modelDir);
   }
 
-  site.removeModelFromCapList(index);
-}
-
-function postProcess(filename) {
   if (config.autoConvertType !== 'mp4' && config.autoConvertType !== 'mkv') {
-    common.dbgMsg(null, 'Moving ' + config.captureDirectory + '/' + filename + '.ts to ' + config.completeDirectory + '/' + filename + '.ts');
-    mv(config.captureDirectory + '/' + filename + '.ts', config.completeDirectory + '/' + filename + '.ts', function(err) {
+    common.dbgMsg(null, colors.model(nm) + ', moving ' + config.captureDirectory + '/' + filename + '.ts to ' + modelDir + '/' + filename + '.ts');
+    mv(config.captureDirectory + '/' + filename + '.ts', modelDir + '/' + filename + '.ts', function(err) {
       if (err) {
         common.errMsg(null, colors.site(filename) + ': ' + err.toString());
       }
@@ -292,7 +256,7 @@ function postProcess(filename) {
       '-bsf:a',
       'aac_adtstoasc',
       '-copyts',
-      config.completeDirectory + '/' + filename + '.' + config.autoConvertType
+      modelDir + '/' + filename + '.' + config.autoConvertType
     ];
   } else if (config.autoConvertType == 'mkv') {
     mySpawnArguments = [
@@ -304,7 +268,7 @@ function postProcess(filename) {
       '-c',
       'copy',
       '-copyts',
-      config.completeDirectory + '/' + filename + '.' + config.autoConvertType
+      modelDir + '/' + filename + '.' + config.autoConvertType
     ];
   }
 
@@ -313,7 +277,7 @@ function postProcess(filename) {
   if (tryingToExit) {
     process.stdout.write('Converting ' + filename + '.ts to ' + filename + '.' + config.autoConvertType + '\n' + colors.time('[' + common.getDateTime() + '] '));
   } else {
-    common.msg(null, 'Converting ' + filename + '.ts to ' + filename + '.' + config.autoConvertType);
+    common.msg(null, colors.model(nm) + ', converting ' + filename + '.ts to ' + filename + '.' + config.autoConvertType);
   }
 
   var myCompleteProcess = childProcess.spawn('ffmpeg', mySpawnArguments);
@@ -327,9 +291,9 @@ function postProcess(filename) {
       if (tryingToExit) {
         process.stdout.write(colors.error('[ERROR]') + ' Deleting ' + filename + '.' + config.autoConvertType + '\n' + colors.time('[' + common.getDateTime() + '] '));
       } else {
-        common.errMsg(null, 'Deleting ' + filename + '.' + config.autoConvertType);
+        common.errMsg(null, colors.model(nm) + ', deleting ' + filename + '.' + config.autoConvertType);
       }
-      fs.unlinkSync(config.completeDirectory + '/' + filename + '.' + config.autoConvertType);
+      fs.unlinkSync(modelDir + '/' + filename + '.' + config.autoConvertType);
     }
     semaphore--; // release semaphore only when ffmpeg process has ended
   });
@@ -340,52 +304,45 @@ function postProcess(filename) {
 }
 
 function startCapture(site, spawnArgs, filename, model) {
-  var nm;
-  switch (site) {
-    case MFC: nm = model.nm; break;
-    case CB:  nm = model;    break;
-  }
 
   //common.dbgMsg(site, 'Launching ffmpeg ' + spawnArgs);
   var captureProcess = childProcess.spawn('ffmpeg', spawnArgs);
 
   captureProcess.on('close', function() {
     if (tryingToExit) {
-      process.stdout.write(colors.site(common.getSiteName(site)) + ' ' + colors.model(nm) + ' capture interrupted\n' + colors.time('[' + common.getDateTime() + '] '));
+      process.stdout.write(colors.site(common.getSiteName(site)) + ' ' + colors.model(model.nm) + ' capture interrupted\n' + colors.time('[' + common.getDateTime() + '] '));
     } else {
-      common.msg(site, colors.model(nm) + ' stopped streaming');
+      common.msg(site, colors.model(model.nm) + ' stopped streaming');
     }
 
-    removeModelFromCapList(site, model);
+    site.removeModelFromCapList(model.uid);
 
     fs.stat(config.captureDirectory + '/' + filename + '.ts', function(err, stats) {
       if (err) {
         if (err.code == 'ENOENT') {
           if (tryingToExit) {
-            process.stdout.write(colors.site(common.getSiteName(site)) + ' ' + colors.error('[ERROR] ') + colors.model(nm) + ': ' + filename + '.ts not found in capturing directory, cannot convert to ' + config.autoConvertType);
+            process.stdout.write(colors.site(common.getSiteName(site)) + ' ' + colors.error('[ERROR] ') + colors.model(model.nm) + ', ' + filename + '.ts not found in capturing directory, cannot convert to ' + config.autoConvertType);
           } else {
-            common.errMsg(site, colors.model(nm) + ': ' + filename + '.ts not found in capturing directory, cannot convert to ' + config.autoConvertType);
+            common.errMsg(site, colors.model(model.nm) + ', ' + filename + '.ts not found in capturing directory, cannot convert to ' + config.autoConvertType);
           }
         } else {
           if (tryingToExit) {
-            process.stdout.write(colors.site(common.getSiteName(site)) + ' ' + colors.error('[ERROR] ') + colors.model(nm) + ': ' +err.toString());
+            process.stdout.write(colors.site(common.getSiteName(site)) + ' ' + colors.error('[ERROR] ') + colors.model(model.nm) + ': ' +err.toString());
           } else {
-            common.errMsg(site, colors.model(nm) + ': ' + err.toString());
+            common.errMsg(site, colors.model(model.nm) + ': ' + err.toString());
           }
         }
-      } else if (stats.size === 0) {
+      } else if (stats.size <= config.minByteSize) {
+        common.msg(site, colors.model(model.nm) + ', ' + filename + '.ts is ' + stats.size + ' bytes which is smaller than ' + config.minByteSize + ' bytes, automatically deleting');
         fs.unlinkSync(config.captureDirectory + '/' + filename + '.ts');
       } else {
-        postProcess(filename);
+        postProcess(filename, model.nm);
       }
     });
   });
 
   if (!!captureProcess.pid) {
-    switch (site) {
-      case MFC: site.addModelToCapList(model.uid, filename, captureProcess.pid); break;
-      case CB:  site.addModelToCapList(model,     filename, captureProcess.pid); break;
-    }
+    site.addModelToCapList(model.uid, filename, captureProcess.pid);
   }
 }
 
@@ -393,6 +350,18 @@ function mainSiteLoop(site) {
 
   Promise.try(function() {
     site.checkFileSize(config.captureDirectory, config.maxByteSize);
+  })
+  .then(function() {
+    return processUpdates(site);
+  })
+  .then(function(bundle) {
+    return addModels(site, bundle);
+  })
+  .then(function(bundle) {
+    return removeModels(site, bundle);
+  })
+  .then(function(dirty) {
+    return writeConfig(site, dirty);
   })
   .then(function() {
     return getModelsToCap(site);
@@ -422,7 +391,7 @@ function mainSiteLoop(site) {
     common.errMsg(site, err);
   })
   .finally(function() {
-    common.msg(site, 'Done, waiting ' + config.modelScanInterval + ' seconds.');
+    common.dbgMsg(site, 'Done, waiting ' + config.modelScanInterval + ' seconds.');
     setTimeout(function() { mainSiteLoop(site); }, config.modelScanInterval * 1000);
   });
 }
@@ -488,6 +457,7 @@ if (config.enableMFC) {
   Promise.try(function() {
     return MFC.connect();
   }).then(function() {
+    common.msg(MFC, config.mfcmodels.length + ' model(s) in config');
     mainSiteLoop(MFC);
   }).catch(function(err) {
     common.errMsg(MFC, err);
@@ -496,6 +466,7 @@ if (config.enableMFC) {
 
 if (config.enableCB) {
   CB.create(CB);
+  common.msg(CB, config.mfcmodels.length + ' model(s) in config');
   mainSiteLoop(CB);
 }
 
