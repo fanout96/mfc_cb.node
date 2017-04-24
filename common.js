@@ -75,12 +75,12 @@ module.exports = {
 
   checkFileSize: function(site, captureDirectory, maxByteSize, currentlyCapping) {
     if (maxByteSize > 0) {
-      for (var i = 0; i < currentlyCapping.length; i++) {
-        var stat = fs.statSync(captureDirectory + '/' + currentlyCapping[i].filename + '.ts');
-        dbgMsg(site, 'Checking file size for ' + currentlyCapping[i].filename + '.  size=' + stat.size + ', maxByteSize=' + maxByteSize);
+      for (var capInfo of currentlyCapping.values()) {
+        var stat = fs.statSync(captureDirectory + '/' + capInfo.filename + '.ts');
+        dbgMsg(site, colors.model(capInfo.nm) + ' file size (' + capInfo.filename + '.ts), size=' + stat.size + ', maxByteSize=' + maxByteSize);
         if (stat.size >= maxByteSize) {
-          msg(site, currentlyCapping[i].filename + '.ts has exceeded the file size limit of ' + maxByteSize + ' bytes, terminating capture');
-          process.kill(currentlyCapping[i].pid, 'SIGINT');
+          msg(site, colors.model(capInfo.nm) + ' recording has exceeded file size limit (size=' + stat.size + ' > maxByteSize=' + maxByteSize + ')');
+          process.kill(capInfo.pid, 'SIGINT');
         }
       }
     }
