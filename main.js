@@ -148,7 +148,7 @@ function addModels(site, bundle) {
 function removeModel(site, model) {
 
   common.msg(site, colors.model(model.nm) + colors.italic(' removed') + ' from capture list.');
-  site.haltCapture(model.uid);
+  site.haltCapture(model);
 
   switch (site) {
     case MFC: config.mfcmodels = _.without(config.mfcmodels, model.uid); break;
@@ -225,19 +225,19 @@ function getModelsToCap(site) {
   }
 }
 
-function postProcess(filename, nm) {
+function postProcess(site, filename, model) {
   var modelDir = config.completeDirectory;
 
   if (config.modelSubdir) {
-    modelDir = modelDir + '/' + nm;
+    modelDir = modelDir + '/' + model.nm;
     mkdirp.sync(modelDir);
   }
 
   if (config.autoConvertType !== 'mp4' && config.autoConvertType !== 'mkv') {
-    common.dbgMsg(null, colors.model(nm) + ', moving ' + config.captureDirectory + '/' + filename + '.ts to ' + modelDir + '/' + filename + '.ts');
+    common.dbgMsg(site, colors.model(model.nm) + ' recording moved (' + config.captureDirectory + '/' + filename + '.ts to ' + modelDir + '/' + filename + '.ts)');
     mv(config.captureDirectory + '/' + filename + '.ts', modelDir + '/' + filename + '.ts', function(err) {
       if (err) {
-        common.errMsg(null, colors.site(filename) + ': ' + err.toString());
+        common.errMsg(site, colors.site(filename) + ': ' + err.toString());
       }
     });
     return;
@@ -274,11 +274,7 @@ function postProcess(filename, nm) {
 
   semaphore++;
 
-  if (tryingToExit) {
-    process.stdout.write('Converting ' + filename + '.ts to ' + filename + '.' + config.autoConvertType + '\n' + colors.time('[' + common.getDateTime() + '] '));
-  } else {
-    common.msg(null, colors.model(nm) + ', converting ' + filename + '.ts to ' + filename + '.' + config.autoConvertType);
-  }
+  common.msg(site, colors.model(model.nm) + ' converting to ' + filename + '.' + config.autoConvertType);
 
   var myCompleteProcess = childProcess.spawn('ffmpeg', mySpawnArguments);
 
@@ -288,18 +284,14 @@ function postProcess(filename, nm) {
     }
     // For debug, to keep disk from filling during active testing
     if (config.autoDelete) {
-      if (tryingToExit) {
-        process.stdout.write(colors.error('[ERROR]') + ' Deleting ' + filename + '.' + config.autoConvertType + '\n' + colors.time('[' + common.getDateTime() + '] '));
-      } else {
-        common.errMsg(null, colors.model(nm) + ', deleting ' + filename + '.' + config.autoConvertType);
-      }
+      common.errMsg(site, colors.model(model.nm) + ' recording is being auto-deleted (' + filename + '.' + config.autoConvertType + ')');
       fs.unlinkSync(modelDir + '/' + filename + '.' + config.autoConvertType);
     }
     semaphore--; // release semaphore only when ffmpeg process has ended
   });
 
   myCompleteProcess.on('error', function(err) {
-    common.errMsg(null, err);
+    common.errMsg(site, err);
   });
 }
 
@@ -310,39 +302,33 @@ function startCapture(site, spawnArgs, filename, model) {
 
   captureProcess.on('close', function() {
     if (tryingToExit) {
-      process.stdout.write(colors.site(common.getSiteName(site)) + ' ' + colors.model(model.nm) + ' capture interrupted\n' + colors.time('[' + common.getDateTime() + '] '));
-    } else {
-      common.msg(site, colors.model(model.nm) + ' stopped streaming');
+      common.msg(site, colors.model(model.nm) + ' capture interrupted');
     }
 
-    site.removeModelFromCapList(model.uid);
+    site.removeModelFromCapList(model);
+
+    if (site === MFC) {
+      site.checkModelState(model.uid);
+    }
 
     fs.stat(config.captureDirectory + '/' + filename + '.ts', function(err, stats) {
       if (err) {
         if (err.code == 'ENOENT') {
-          if (tryingToExit) {
-            process.stdout.write(colors.site(common.getSiteName(site)) + ' ' + colors.error('[ERROR] ') + colors.model(model.nm) + ', ' + filename + '.ts not found in capturing directory, cannot convert to ' + config.autoConvertType);
-          } else {
-            common.errMsg(site, colors.model(model.nm) + ', ' + filename + '.ts not found in capturing directory, cannot convert to ' + config.autoConvertType);
-          }
+          common.errMsg(site, colors.model(model.nm) + ', ' + filename + '.ts not found in capturing directory, cannot convert to ' + config.autoConvertType);
         } else {
-          if (tryingToExit) {
-            process.stdout.write(colors.site(common.getSiteName(site)) + ' ' + colors.error('[ERROR] ') + colors.model(model.nm) + ': ' +err.toString());
-          } else {
-            common.errMsg(site, colors.model(model.nm) + ': ' + err.toString());
-          }
+          common.errMsg(site, colors.model(model.nm) + ': ' + err.toString());
         }
       } else if (stats.size <= config.minByteSize) {
-        common.msg(site, colors.model(model.nm) + ', ' + filename + '.ts is ' + stats.size + ' bytes which is smaller than ' + config.minByteSize + ' bytes, automatically deleting');
+        common.msg(site, colors.model(model.nm) + ' recording automatically deleted (size=' + stats.size + ' < minSizeBytes=' + config.minByteSize + ')');
         fs.unlinkSync(config.captureDirectory + '/' + filename + '.ts');
       } else {
-        postProcess(filename, model.nm);
+        postProcess(site, filename, model);
       }
     });
   });
 
   if (!!captureProcess.pid) {
-    site.addModelToCapList(model.uid, filename, captureProcess.pid);
+    site.addModelToCapList(model, filename, captureProcess.pid);
   }
 }
 
@@ -419,7 +405,6 @@ function tryExit() {
     capsInProgress += SITES[i].getNumCapsInProgress();
   }
   if (semaphore === 0 && capsInProgress === 0) {
-    process.stdout.write('\n');
     if (config.enableMFC) {
       MFC.disconnect();
     }
@@ -427,9 +412,6 @@ function tryExit() {
   } else {
     sleep(1000).then(() => {
       tryExit(); // recursion!
-      // periodically print something so it is more obvious
-      // that the script is not hung while waiting on ffmpeg
-      process.stdout.write('.');
     });
   }
 }
@@ -446,7 +428,6 @@ process.on('SIGINT', function() {
       // extra newline to avoid ^C
       process.stdout.write('\n');
       common.msg(null, 'Waiting for ' + capsInProgress + ' capture stream(s) to end.');
-      process.stdout.write(colors.time('[' + common.getDateTime() + '] ')); // log beautification
     }
     tryExit();
   }

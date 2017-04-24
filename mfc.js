@@ -7,30 +7,18 @@ var common  = require('./common');
 
 var mfcGuest;
 var modelsToCap = [];
-var currentlyCapping = [];
+var modelState = new Map();
+var currentlyCapping = new Map();
 var me; // backpointer for common print methods
 
-function removeModelFromCapList(uid) {
-  for (var i = 0; i < currentlyCapping.length; i++) {
-    if (currentlyCapping[i].uid == uid) {
-      currentlyCapping.splice(i, 1);
-      return;
+function haltCapture(model, offline) {
+  if (currentlyCapping.has(model.uid)) {
+    var capInfo = currentlyCapping.get(model.uid);
+    process.kill(capInfo.pid, 'SIGINT');
+    if (offline === 1) {
+      common.dbgMsg(me, colors.model(model.uid) + ' is offline, but ffmpeg is still capping. Sending SIGINT to end capture');
     }
   }
-  return;
-}
-
-function haltCapture(uid, offline) {
-  for (var i = 0; i < currentlyCapping.length; i++) {
-    if (currentlyCapping[i].uid == uid) {
-      process.kill(currentlyCapping[i].pid, 'SIGINT');
-      if (offline === 1) {
-        common.dbgMsg(me, colors.model(uid) + ' is offline, but ffmpeg is still capping. Sending SIGINT to end capture');
-      }
-      return;
-    }
-  }
-  return;
 }
 
 module.exports = {
@@ -73,8 +61,8 @@ module.exports = {
     modelsToCap = [];
   },
 
-  haltCapture: function(uid) {
-    haltCapture(uid, 0);
+  haltCapture: function(model) {
+    haltCapture(model, 0);
     return;
   },
 
@@ -83,26 +71,32 @@ module.exports = {
       return mfcGuest.queryUser(uid);
     }).then(function(model) {
       if (model !== undefined) {
+        var msg = colors.model(model.nm);
         if (model.vs === mfc.STATE.FreeChat) {
-          common.dbgMsg(me, colors.model(model.nm) + ' is in public chat!');
+          msg = msg + ' is in public chat!';
           modelsToCap.push(model);
         } else if (model.vs === mfc.STATE.GroupShow) {
-          common.dbgMsg(me, colors.model(model.nm) + ' is in a group show');
+          msg = msg + ' is in a group show';
         } else if (model.vs === mfc.STATE.Private) {
           if (model.truepvt === 1) {
-            common.dbgMsg(me, colors.model(model.nm) + ' is in a true private show.');
+            msg = msg + ' is in a true private show.';
           } else {
-            common.dbgMsg(me, colors.model(model.nm) + ' is in a private show.');
+            msg = msg + ' is in a private show.';
           }
         } else if (model.vs === mfc.STATE.Away) {
-          common.dbgMsg(me, colors.model(model.nm) + ' is away.');
+          msg = msg + ' is away.';
         } else if (model.vs === mfc.STATE.Online) {
-          common.dbgMsg(me, colors.model(model.nm + '\'s') + ' cam is off.');
+          msg = msg + colors.model('\'s') + ' cam is off.';
         } else if (model.vs === mfc.STATE.Offline) {
+          msg = msg + ' has logged off.';
           // Sometimes the ffmpeg process doesn't end when a model
           // logs off, but we can detect that and stop the capture
           haltCapture(uid, 1);
         }
+        if ((modelState.has(uid) || model.vs !== mfc.STATE.Offline) && model.vs !== modelState.get(uid)) {
+          common.msg(me, msg);
+        }
+        modelState.set(uid, model.vs);
       }
       return true;
     })
@@ -111,17 +105,16 @@ module.exports = {
     });
   },
 
-  addModelToCapList: function(uid, filename, pid) {
-    var cap = {uid: uid, filename: filename, pid: pid};
-    currentlyCapping.push(cap);
+  addModelToCapList: function(model, filename, pid) {
+    currentlyCapping.set(model.uid, {nm: model.nm, filename: filename, pid: pid});
   },
 
-  removeModelFromCapList: function(uid) {
-    removeModelFromCapList(uid);
+  removeModelFromCapList: function(model) {
+    currentlyCapping.delete(model.uid);
   },
 
   getNumCapsInProgress: function() {
-    return currentlyCapping.length;
+    return currentlyCapping.size;
   },
 
   checkFileSize: function(captureDirectory, maxByteSize) {
@@ -129,17 +122,15 @@ module.exports = {
   },
 
   setupCapture: function(model, tryingToExit) {
-    for (var i = 0; i < currentlyCapping.length; i++) {
-      if (currentlyCapping[i].uid == model.uid) {
-        common.dbgMsg(me, colors.model(model.nm) + ' is already capturing');
-        return Promise.try(function() {
-          return {spawnArgs: '', filename: '', model: ''};
-        });
-      }
+    if (currentlyCapping.has(model.uid)) {
+      common.dbgMsg(me, colors.model(model.nm) + ' is already capturing');
+      return Promise.try(function() {
+        return {spawnArgs: '', filename: '', model: ''};
+      });
     }
 
     if (tryingToExit) {
-      common.dbgMsg(me, model.nm + ' capture not starting due to ctrl+c');
+      common.dbgMsg(me, colors.model(model.nm) + ' capture not starting due to ctrl+c');
       return Promise.try(function() {
         return {spawnArgs: '', filename: '', model: ''};
       });
@@ -149,7 +140,7 @@ module.exports = {
       var filename = common.getFileName(me, model.nm);
       var spawnArgs = common.getCaptureArguments('http://video' + (model.u.camserv - 500) + '.myfreecams.com:1935/NxServer/ngrp:mfc_' + (100000000 + model.uid) + '.f4v_mobile/playlist.m3u8', filename);
 
-      common.msg(me, colors.model(model.nm) + ', starting ffmpeg capture to ' + filename + '.ts');
+      common.msg(me, colors.model(model.nm) + ' recording started (' + filename + '.ts)');
 
       return {spawnArgs: spawnArgs, filename: filename, model: model};
     })

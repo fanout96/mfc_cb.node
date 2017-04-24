@@ -9,16 +9,7 @@ var common  = require('./common');
 var session = bhttp.session();
 var me; // backpointer for common printing methods
 
-var currentlyCapping = [];
-
-function removeModelFromCapList(nm) {
-  for (var i = 0; i < currentlyCapping.length; i++) {
-    if (currentlyCapping[i].nm == nm) {
-      currentlyCapping.splice(i, 1);
-      return;
-    }
-  }
-}
+var currentlyCapping = new Map();
 
 function getOnlineModels(page) {
   return Promise.try(function() {
@@ -105,27 +96,23 @@ module.exports = {
     return getOnlineModels(1);
   },
 
-  addModelToCapList: function(nm, filename, pid) {
-    var cap = {nm: nm, filename: filename, pid: pid};
-    currentlyCapping.push(cap);
+  addModelToCapList: function(model, filename, pid) {
+    currentlyCapping.set(model.uid, {nm: model.nm, filename: filename, pid: pid});
   },
 
-  removeModelFromCapList: function(nm) {
-    removeModelFromCapList(nm);
+  removeModelFromCapList: function(model) {
+    currentlyCapping.delete(model.uid);
   },
 
   getNumCapsInProgress: function() {
-    return currentlyCapping.length;
+    return currentlyCapping.size;
   },
 
-  haltCapture: function(nm) {
-    for (var i = 0; i < currentlyCapping.length; i++) {
-      if (currentlyCapping[i].nm == nm) {
-        process.kill(currentlyCapping[i].pid, 'SIGINT');
-        return;
-      }
+  haltCapture: function(model) {
+    if (currentlyCapping.has(model.uid)) {
+      var capInfo = currentlyCapping.get(model.uid);
+      process.kill(capInfo.pid, 'SIGINT');
     }
-    return;
   },
 
   checkFileSize: function(captureDirectory, maxByteSize) {
@@ -133,13 +120,11 @@ module.exports = {
   },
 
   setupCapture: function(model, tryingToExit) {
-    for (var i = 0; i < currentlyCapping.length; i++) {
-      if (currentlyCapping[i].nm == model.nm) {
-        common.dbgMsg(me, colors.model(model.nm) + ' is already capturing');
-        return Promise.try(function() {
-          return {spawnArgs: '', filename: '', model: ''};
-        });
-      }
+    if (currentlyCapping.has(model.uid)) {
+      common.dbgMsg(me, colors.model(model.nm) + ' is already capturing');
+      return Promise.try(function() {
+        return {spawnArgs: '', filename: '', model: ''};
+      });
     }
 
     if (tryingToExit) {
@@ -155,7 +140,7 @@ module.exports = {
       var filename = common.getFileName(me, model.nm);
       var spawnArgs = common.getCaptureArguments(url, filename);
 
-      common.msg(me, colors.model(model.nm) + ', starting ffmpeg capture to ' + filename + '.ts');
+      common.msg(me, colors.model(model.nm) + ' recording started (' + filename + '.ts)');
 
       return {spawnArgs: spawnArgs, filename: filename, model: model};
     })
