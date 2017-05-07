@@ -140,8 +140,6 @@ module.exports = {
       var filename = common.getFileName(me, model.nm);
       var spawnArgs = common.getCaptureArguments(url, filename);
 
-      common.msg(me, colors.model(model.nm) + ' recording started (' + filename + '.ts)');
-
       return {spawnArgs: spawnArgs, filename: filename, model: model};
     })
     .catch(function(err) {
