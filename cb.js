@@ -96,8 +96,8 @@ module.exports = {
     return getOnlineModels(1);
   },
 
-  addModelToCapList: function(model, filename, pid) {
-    currentlyCapping.set(model.uid, {nm: model.nm, filename: filename, pid: pid});
+  addModelToCapList: function(model, filename, captureProcess) {
+    currentlyCapping.set(model.uid, {nm: model.nm, filename: filename, captureProcess: captureProcess});
   },
 
   removeModelFromCapList: function(model) {
@@ -111,7 +111,7 @@ module.exports = {
   haltCapture: function(model) {
     if (currentlyCapping.has(model.uid)) {
       var capInfo = currentlyCapping.get(model.uid);
-      process.kill(capInfo.pid, 'SIGINT');
+      capInfo.captureProcess.kill('SIGINT');
     }
   },
 
@@ -139,8 +139,6 @@ module.exports = {
     }).then(function (url) {
       var filename = common.getFileName(me, model.nm);
       var spawnArgs = common.getCaptureArguments(url, filename);
-
-      common.msg(me, colors.model(model.nm) + ' recording started (' + filename + '.ts)');
 
       return {spawnArgs: spawnArgs, filename: filename, model: model};
     })

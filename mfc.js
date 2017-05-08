@@ -11,13 +11,10 @@ var modelState = new Map();
 var currentlyCapping = new Map();
 var me; // backpointer for common print methods
 
-function haltCapture(model, offline) {
+function haltCapture(model) {
   if (currentlyCapping.has(model.uid)) {
     var capInfo = currentlyCapping.get(model.uid);
-    process.kill(capInfo.pid, 'SIGINT');
-    if (offline === 1) {
-      common.dbgMsg(me, colors.model(model.uid) + ' is offline, but ffmpeg is still capping. Sending SIGINT to end capture');
-    }
+    capInfo.captureProcess.kill('SIGINT');
   }
 }
 
@@ -62,8 +59,7 @@ module.exports = {
   },
 
   haltCapture: function(model) {
-    haltCapture(model, 0);
-    return;
+    haltCapture(model);
   },
 
   checkModelState: function(uid) {
@@ -71,10 +67,12 @@ module.exports = {
       return mfcGuest.queryUser(uid);
     }).then(function(model) {
       if (model !== undefined) {
+        var isBroadcasting = 0;
         var msg = colors.model(model.nm);
         if (model.vs === mfc.STATE.FreeChat) {
           msg = msg + ' is in public chat!';
           modelsToCap.push(model);
+          isBroadcasting = 1;
         } else if (model.vs === mfc.STATE.GroupShow) {
           msg = msg + ' is in a group show';
         } else if (model.vs === mfc.STATE.Private) {
@@ -89,14 +87,17 @@ module.exports = {
           msg = msg + colors.model('\'s') + ' cam is off.';
         } else if (model.vs === mfc.STATE.Offline) {
           msg = msg + ' has logged off.';
-          // Sometimes the ffmpeg process doesn't end when a model
-          // logs off, but we can detect that and stop the capture
-          haltCapture(uid, 1);
         }
         if ((modelState.has(uid) || model.vs !== mfc.STATE.Offline) && model.vs !== modelState.get(uid)) {
           common.msg(me, msg);
         }
         modelState.set(uid, model.vs);
+        if (currentlyCapping.has(model.uid) && isBroadcasting === 0) {
+          // Sometimes the ffmpeg process doesn't end when a model
+          // stops broadcasting, so terminate it.
+          common.dbgMsg(me, colors.model(model.nm) + ' is not broadcasting, but ffmpeg is still active. Terminating with SIGINT.');
+          haltCapture(uid);
+        }
       }
       return true;
     })
@@ -105,8 +106,12 @@ module.exports = {
     });
   },
 
-  addModelToCapList: function(model, filename, pid) {
-    currentlyCapping.set(model.uid, {nm: model.nm, filename: filename, pid: pid});
+  addModelToCapList: function(model, filename, captureProcess) {
+    if (currentlyCapping.has(model.uid)) {
+      common.errMsg(me, colors.model(model.nm) + ' is already capturing, terminating current capture, if this happens please report a bug on github with full debug logs');
+      haltCapture(model.uid);
+    }
+    currentlyCapping.set(model.uid, {nm: model.nm, filename: filename, captureProcess: captureProcess});
   },
 
   removeModelFromCapList: function(model) {
@@ -139,8 +144,6 @@ module.exports = {
     return Promise.try(function() {
       var filename = common.getFileName(me, model.nm);
       var spawnArgs = common.getCaptureArguments('http://video' + (model.u.camserv - 500) + '.myfreecams.com:1935/NxServer/ngrp:mfc_' + (100000000 + model.uid) + '.f4v_mobile/playlist.m3u8', filename);
-
-      common.msg(me, colors.model(model.nm) + ' recording started (' + filename + '.ts)');
 
       return {spawnArgs: spawnArgs, filename: filename, model: model};
     })

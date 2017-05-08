@@ -87,8 +87,7 @@ function processUpdates(site) {
     }
   }
 
-  var bundle = {includeModels: includeModels, excludeModels: excludeModels, dirty: false};
-  return bundle;
+  return {includeModels: includeModels, excludeModels: excludeModels, dirty: false};
 }
 
 function addModel(site, model) {
@@ -282,11 +281,6 @@ function postProcess(site, filename, model) {
     if (!config.keepTsFile) {
       fs.unlinkSync(config.captureDirectory + '/' + filename + '.ts');
     }
-    // For debug, to keep disk from filling during active testing
-    if (config.autoDelete) {
-      common.errMsg(site, colors.model(model.nm) + ' recording is being auto-deleted (' + filename + '.' + config.autoConvertType + ')');
-      fs.unlinkSync(modelDir + '/' + filename + '.' + config.autoConvertType);
-    }
     semaphore--; // release semaphore only when ffmpeg process has ended
   });
 
@@ -297,7 +291,6 @@ function postProcess(site, filename, model) {
 
 function startCapture(site, spawnArgs, filename, model) {
 
-  //common.dbgMsg(site, 'Launching ffmpeg ' + spawnArgs);
   var captureProcess = childProcess.spawn('ffmpeg', spawnArgs);
 
   captureProcess.on('close', function() {
@@ -306,10 +299,6 @@ function startCapture(site, spawnArgs, filename, model) {
     }
 
     site.removeModelFromCapList(model);
-
-    if (site === MFC) {
-      site.checkModelState(model.uid);
-    }
 
     fs.stat(config.captureDirectory + '/' + filename + '.ts', function(err, stats) {
       if (err) {
@@ -328,7 +317,8 @@ function startCapture(site, spawnArgs, filename, model) {
   });
 
   if (!!captureProcess.pid) {
-    site.addModelToCapList(model, filename, captureProcess.pid);
+    common.msg(site, colors.model(model.nm) + ' recording started (' + filename + '.ts)');
+    site.addModelToCapList(model, filename, captureProcess);
   }
 }
 
@@ -447,7 +437,7 @@ if (config.enableMFC) {
 
 if (config.enableCB) {
   CB.create(CB);
-  common.msg(CB, config.mfcmodels.length + ' model(s) in config');
+  common.msg(CB, config.cbmodels.length + ' model(s) in config');
   mainSiteLoop(CB);
 }
 
