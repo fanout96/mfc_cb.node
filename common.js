@@ -80,7 +80,7 @@ module.exports = {
         dbgMsg(site, colors.model(capInfo.nm) + ' file size (' + capInfo.filename + '.ts), size=' + stat.size + ', maxByteSize=' + maxByteSize);
         if (stat.size >= maxByteSize) {
           msg(site, colors.model(capInfo.nm) + ' recording has exceeded file size limit (size=' + stat.size + ' > maxByteSize=' + maxByteSize + ')');
-          process.kill(capInfo.pid, 'SIGINT');
+          capInfo.captureProcess.kill('SIGINT');
         }
       }
     }

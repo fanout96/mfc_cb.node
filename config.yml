@@ -3,7 +3,6 @@ completeDirectory: captured
 modelSubdir: true
 modelScanInterval: 300
 autoConvertType: mp4
-autoDelete: false
 keepTsFile: false
 minByteSize: 0
 maxByteSize: 0

@@ -281,11 +281,6 @@ function postProcess(site, filename, model) {
     if (!config.keepTsFile) {
       fs.unlinkSync(config.captureDirectory + '/' + filename + '.ts');
     }
-    // For debug, to keep disk from filling during active testing
-    if (config.autoDelete) {
-      common.errMsg(site, colors.model(model.nm) + ' recording is being auto-deleted (' + filename + '.' + config.autoConvertType + ')');
-      fs.unlinkSync(modelDir + '/' + filename + '.' + config.autoConvertType);
-    }
     semaphore--; // release semaphore only when ffmpeg process has ended
   });
 
@@ -323,7 +318,7 @@ function startCapture(site, spawnArgs, filename, model) {
 
   if (!!captureProcess.pid) {
     common.msg(site, colors.model(model.nm) + ' recording started (' + filename + '.ts)');
-    site.addModelToCapList(model, filename, captureProcess.pid);
+    site.addModelToCapList(model, filename, captureProcess);
   }
 }
 

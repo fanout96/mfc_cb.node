@@ -14,7 +14,7 @@ var me; // backpointer for common print methods
 function haltCapture(model) {
   if (currentlyCapping.has(model.uid)) {
     var capInfo = currentlyCapping.get(model.uid);
-    process.kill(capInfo.pid, 'SIGINT');
+    capInfo.captureProcess.kill('SIGINT');
   }
 }
 
@@ -106,12 +106,12 @@ module.exports = {
     });
   },
 
-  addModelToCapList: function(model, filename, pid) {
+  addModelToCapList: function(model, filename, captureProcess) {
     if (currentlyCapping.has(model.uid)) {
       common.errMsg(me, colors.model(model.nm) + ' is already capturing, terminating current capture, if this happens please report a bug on github with full debug logs');
       haltCapture(model.uid);
     }
-    currentlyCapping.set(model.uid, {nm: model.nm, filename: filename, pid: pid});
+    currentlyCapping.set(model.uid, {nm: model.nm, filename: filename, captureProcess: captureProcess});
   },
 
   removeModelFromCapList: function(model) {
