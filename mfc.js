@@ -96,7 +96,7 @@ module.exports = {
           // Sometimes the ffmpeg process doesn't end when a model
           // stops broadcasting, so terminate it.
           common.dbgMsg(me, colors.model(model.nm) + ' is not broadcasting, but ffmpeg is still active. Terminating with SIGINT.');
-          haltCapture(uid);
+          haltCapture(model);
         }
       }
       return true;
@@ -109,7 +109,7 @@ module.exports = {
   addModelToCapList: function(model, filename, captureProcess) {
     if (currentlyCapping.has(model.uid)) {
       common.errMsg(me, colors.model(model.nm) + ' is already capturing, terminating current capture, if this happens please report a bug on github with full debug logs');
-      haltCapture(model.uid);
+      haltCapture(model);
     }
     currentlyCapping.set(model.uid, {nm: model.nm, filename: filename, captureProcess: captureProcess});
   },
