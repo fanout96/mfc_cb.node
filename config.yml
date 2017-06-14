@@ -6,6 +6,7 @@ autoConvertType: mp4
 keepTsFile: false
 minByteSize: 0
 maxByteSize: 0
+notifications: true
 dateFormat: YYYYMMDD_HHmmss
 debug: false
 modelcolor: magenta
@@ -14,6 +15,7 @@ sitecolor: green
 debugcolor: yellow
 errorcolor: red
 includeSiteInFile: false
+includeSiteInDir: false
 enableMFC: true
 enableCB: true
 mfcmodels:
