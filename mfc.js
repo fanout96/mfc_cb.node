@@ -6,10 +6,11 @@ var mfc     = require('MFCAuto');
 var common  = require('./common');
 
 var mfcGuest;
+var me; // backpointer for common print methods
+
 var modelsToCap = [];
 var modelState = new Map();
 var currentlyCapping = new Map();
-var me; // backpointer for common print methods
 
 function haltCapture(model) {
   if (currentlyCapping.has(model.uid)) {

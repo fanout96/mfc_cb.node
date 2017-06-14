@@ -198,33 +198,6 @@ function writeConfig(site, dirty) {
   }
 }
 
-function getModelsToCap(site) {
-  switch (site) {
-    case MFC:
-      site.clearMyModels();
-      return Promise.all(config.mfcmodels.map(MFC.checkModelState))
-      .then(function() {
-        return site.getModelsToCap();
-      })
-      .catch(function(err) {
-        common.errMsg(site, err.toString());
-      });
-
-    case CB:
-      return Promise.all(site.getOnlineModels())
-      .then(function(onlineModels) {
-        var modelsToCap = [];
-        _.each(config.cbmodels, function(nm) {
-          var modelIndex = onlineModels.indexOf(nm);
-          if (modelIndex !== -1) {
-            modelsToCap.push({nm: nm, uid: nm});
-          }
-        });
-        return modelsToCap;
-      });
-  }
-}
-
 function postProcess(site, filename, model) {
   var modelDir = config.completeDirectory;
 
@@ -358,7 +331,16 @@ function mainSiteLoop(site) {
     return writeConfig(site, dirty);
   })
   .then(function() {
-    return getModelsToCap(site);
+    return site.clearMyModels();
+  })
+  .then(function() {
+    switch (site) {
+      case MFC: return Promise.all(config.mfcmodels.map(site.checkModelState));
+      case CB:  return Promise.all(config.cbmodels.map(site.checkModelState));
+    }
+  })
+  .then(function() {
+    return site.getModelsToCap();
   })
   .then(function(modelsToCap) {
     if (modelsToCap !== null) {
