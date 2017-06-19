@@ -9,49 +9,17 @@ var common  = require('./common');
 var session = bhttp.session();
 var me; // backpointer for common printing methods
 
+var modelsToCap = [];
+var onlineModels = new Map();
+var modelState = new Map();
 var currentlyCapping = new Map();
 
-function getOnlineModels(page) {
+function findOnlineModels() {
   return Promise.try(function() {
-    return session.get('https://chaturbate.com/?page=' + page);
+    return bhttp.get('http://chaturbate.com/affiliates/api/onlinerooms/?wm=mnzQo&format=json&gender=f');
   }).then(function(response) {
-
-    var $ = cheerio.load(response.body);
-
-    // Get an array of models found on this page
-    var currentModels = $('#main div.content ul.list').children('li')
-    .filter(function(){
-        return $(this).find('div.details ul.sub-info li.cams').text() != 'offline';
-    })
-    .map(function(){
-        return $(this).find('div.title a').text().trim().split(',');
-    })
-    .get();
-
-    // Find the total number of model pages
-    var pages = $('#main div.content ul.paging').children('li')
-    .filter(function() {
-      return $(this).find('a').text().trim() != 'next';
-    })
-    .map(function() {
-      return $(this).find('a').text().trim();
-    })
-    .get();
-    var totalPages = pages[pages.length-1];
-
-    //common.dbgMsg(me, 'Fetching page ' + page + '/' + totalPages);
-
-    // Recurse until models on all pages are loaded
-    if (page < totalPages) {
-      return getOnlineModels(page+1)
-      .then(function(models) {
-        return currentModels.concat(models);
-      })
-      .catch(function(err) {
-        common.errMsg(me, err);
-      });
-    } else {
-      return currentModels;
+    for (var i = 0; i < response.body.length; i++) {
+      onlineModels.set(response.body[i].username, response.body[i].current_show);
     }
   })
   .catch(function(err) {
@@ -64,22 +32,33 @@ function getStream(nm) {
     return session.get('https://chaturbate.com/' + nm + '/');
   }).then(function (response) {
     var url = '';
-    var $ = cheerio.load(response.body);
+    var page = cheerio.load(response.body);
 
-    var scripts = $('script')
+    var scripts = page('script')
     .map(function(){
-      return $(this).text();
+      return page(this).text();
     }).get().join('');
 
     var streamData = scripts.match(/(https\:\/\/\w+\.stream\.highwebmedia\.com\/live-edge\/[\w\-]+\/playlist\.m3u8)/i);
 
     if (streamData !== null) {
       url = streamData[1];
-      //common.dbgMsg(me, 'url = ' + url);
     } else {
-      common.errMsg(me, nm + ' is offline');
+      streamData = scripts.match(/(https\:\/\/\w+\.stream\.highwebmedia\.com\/live-edge\/amlst\:[\w\-]+\/playlist\.m3u8)/i);
+      if (streamData !== null) {
+        url = streamData[1];
+      } else {
+        // CB's JSON for online models does not update quickly when a model
+        // logs off, and the JSON can take up to 30 minutes to update.
+        // When a model is offline, the models page redirect to a login
+        // page and there won't be a match for the m3u8 regex.
+        // Temporarily commenting out the error, until a better solution
+        // is coded.
+        //common.errMsg(me, nm + ', failed to find m3u8 stream');
+      }
     }
 
+    //common.dbgMsg(me, 'url = ' + url);
     return url;
   })
   .catch(function(err) {
@@ -87,13 +66,63 @@ function getStream(nm) {
   });
 }
 
+function haltCapture(nm) {
+  if (currentlyCapping.has(nm)) {
+    var capInfo = currentlyCapping.get(nm);
+    capInfo.captureProcess.kill('SIGINT');
+  }
+}
+
 module.exports = {
   create: function(myself) {
     me = myself;
   },
 
-  getOnlineModels: function() {
-    return getOnlineModels(1);
+  clearMyModels: function() {
+    modelsToCap = [];
+    return findOnlineModels();
+  },
+
+  checkModelState: function(nm) {
+    return Promise.try(function() {
+      var msg = colors.model(nm);
+      var isBroadcasting = 0;
+      if (onlineModels.has(nm)) {
+        var currState = onlineModels.get(nm);
+        if (currState === 'public') {
+          msg = msg + ' is in public chat!';
+          modelsToCap.push({uid: nm, nm: nm});
+          isBroadcasting = 1;
+        } else if (currState === 'private') {
+          msg = msg + ' is in a private show.';
+        } else if (currState === 'away') {
+          msg = msg + colors.model('\'s') + ' cam is off.';
+        } else if (currState === 'hidden') {
+          msg = msg + ' model is online but hidden.';
+        } else {
+          msg = msg + ' has unknown state ' + currState;
+        }
+        if (!modelState.has(nm) || (modelState.has(nm) && currState !== modelState.get(nm))) {
+          common.msg(me, msg);
+        }
+        modelState.set(nm, currState);
+      } else {
+        if (modelState.has(nm) && modelState.get(nm) !== 'offline') {
+          msg = msg + ' has logged off.';
+        } else {
+          modelState.set(nm, 'offline');
+        }
+      }
+      if (currentlyCapping.has(nm) && isBroadcasting === 0) {
+        common.dbgMsg(me, colors.model(nm) + ' is not broadcasting, but ffmpeg is still active. Terminating with SIGINT.');
+        haltCapture(nm);
+      }
+      return true;
+    });
+  },
+
+  getModelsToCap: function() {
+    return modelsToCap;
   },
 
   addModelToCapList: function(model, filename, captureProcess) {
@@ -109,10 +138,7 @@ module.exports = {
   },
 
   haltCapture: function(model) {
-    if (currentlyCapping.has(model.uid)) {
-      var capInfo = currentlyCapping.get(model.uid);
-      capInfo.captureProcess.kill('SIGINT');
-    }
+    haltCapture(model.nm);
   },
 
   checkFileSize: function(captureDirectory, maxByteSize) {
@@ -140,7 +166,11 @@ module.exports = {
       var filename = common.getFileName(me, model.nm);
       var spawnArgs = common.getCaptureArguments(url, filename);
 
-      return {spawnArgs: spawnArgs, filename: filename, model: model};
+      if (url === '') {
+        return {spawnArgs: '', filename: filename, model: model};
+      } else {
+        return {spawnArgs: spawnArgs, filename: filename, model: model};
+      }
     })
     .catch(function(err) {
       common.errMsg(me, colors.model(model.nm) + ' ' + err.toString());

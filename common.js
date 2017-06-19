@@ -110,6 +110,12 @@ module.exports = {
       url,
       '-c',
       'copy',
+     '-vsync',
+      '2',
+      '-r',
+      '60',
+      '-b:v',
+      '500k',
       config.captureDirectory + '/' + filename + '.ts'
     ];
     return spawnArgs;

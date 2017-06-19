@@ -11,6 +11,7 @@ var colors       = require('colors/safe');
 var _            = require('underscore');
 var childProcess = require('child_process');
 var path         = require('path');
+var notifier     = require('node-notifier');
 
 // Load local libraries
 var common       = require('./common');
@@ -197,38 +198,22 @@ function writeConfig(site, dirty) {
   }
 }
 
-function getModelsToCap(site) {
-  switch (site) {
-    case MFC:
-      site.clearMyModels();
-      return Promise.all(config.mfcmodels.map(MFC.checkModelState))
-      .then(function() {
-        return site.getModelsToCap();
-      })
-      .catch(function(err) {
-        common.errMsg(site, err.toString());
-      });
-
-    case CB:
-      return Promise.all(site.getOnlineModels())
-      .then(function(onlineModels) {
-        var modelsToCap = [];
-        _.each(config.cbmodels, function(nm) {
-          var modelIndex = onlineModels.indexOf(nm);
-          if (modelIndex !== -1) {
-            modelsToCap.push({nm: nm, uid: nm});
-          }
-        });
-        return modelsToCap;
-      });
-  }
-}
-
 function postProcess(site, filename, model) {
   var modelDir = config.completeDirectory;
 
   if (config.modelSubdir) {
-    modelDir = modelDir + '/' + model.nm;
+    var siteStr = '';
+    if (config.includeSiteInDir) {
+      // If a model has the same name on both mfc and cb, but with different
+      // case, and if the user is running node using bash for windows, weird
+      // stuff happens since Win/NTFS isn't case sensitive, so make the dir
+      // names unique per site.
+      switch (site) {
+        case MFC: siteStr = '_mfc'; break;
+        case CB:  siteStr = '_cb';  break;
+      }
+    }
+    modelDir = modelDir + '/' + model.nm + siteStr;
     mkdirp.sync(modelDir);
   }
 
@@ -252,12 +237,6 @@ function postProcess(site, filename, model) {
       config.captureDirectory + '/' + filename + '.ts',
       '-c',
       'copy',
-      '-vsync',
-      '2',
-      '-r',
-      '60',
-      '-b:v',
-      '500k',
       '-bsf:a',
       'aac_adtstoasc',
       '-copyts',
@@ -272,12 +251,6 @@ function postProcess(site, filename, model) {
       config.captureDirectory + '/' + filename + '.ts',
       '-c',
       'copy',
-      '-vsync',
-      '2',
-      '-r',
-      '60',
-      '-b:v',
-      '500k',
       '-copyts',
       modelDir + '/' + filename + '.' + config.autoConvertType
     ];
@@ -313,6 +286,9 @@ function startCapture(site, spawnArgs, filename, model) {
     site.removeModelFromCapList(model);
 
     fs.stat(config.captureDirectory + '/' + filename + '.ts', function(err, stats) {
+      if (config.notificatons) {
+        notifier.notify({ title: 'mfc_cb.node', message: model.nm + ' recording stopped'});
+      }
       if (err) {
         if (err.code == 'ENOENT') {
           common.errMsg(site, colors.model(model.nm) + ', ' + filename + '.ts not found in capturing directory, cannot convert to ' + config.autoConvertType);
@@ -330,6 +306,9 @@ function startCapture(site, spawnArgs, filename, model) {
 
   if (!!captureProcess.pid) {
     common.msg(site, colors.model(model.nm) + ' recording started (' + filename + '.ts)');
+    if (config.notificatons) {
+      notifier.notify({ title: 'mfc_cb.node', message: model.nm + ' recording started', contentImage: './mfc.png', icon: './cb.ico' });
+    }
     site.addModelToCapList(model, filename, captureProcess);
   }
 }
@@ -352,7 +331,16 @@ function mainSiteLoop(site) {
     return writeConfig(site, dirty);
   })
   .then(function() {
-    return getModelsToCap(site);
+    return site.clearMyModels();
+  })
+  .then(function() {
+    switch (site) {
+      case MFC: return Promise.all(config.mfcmodels.map(site.checkModelState));
+      case CB:  return Promise.all(config.cbmodels.map(site.checkModelState));
+    }
+  })
+  .then(function() {
+    return site.getModelsToCap();
   })
   .then(function(modelsToCap) {
     if (modelsToCap !== null) {
