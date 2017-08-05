@@ -16,11 +16,42 @@ var currentlyCapping = new Map();
 
 function findOnlineModels() {
   return Promise.try(function() {
-    return bhttp.get('http://chaturbate.com/affiliates/api/onlinerooms/?wm=mnzQo&format=json&gender=f');
+    return bhttp.get('https://chaturbate.com/tours/3/?c=10000');
   }).then(function(response) {
-    for (var i = 0; i < response.body.length; i++) {
-      onlineModels.set(response.body[i].username, response.body[i].current_show);
-    }
+  
+onlineModels = new Map();
+	  
+var $ = cheerio.load(response.body);
+
+$('ul.list li').each(function(i,li){
+
+var CS = $(li).find('div.thumbnail_label');
+
+var currState = "away";
+
+if(CS.hasClass("thumbnail_label_c_hd") || CS.hasClass("thumbnail_label_c_new") || CS.hasClass("thumbnail_label_exhibitionist") || CS.hasClass("thumbnail_label_c")){
+currState = "public";
+}
+else if(CS.hasClass("thumbnail_label_c_private_show")){
+currState = "private";
+}
+else if(CS.hasClass("thumbnail_label_c_group_show")){
+currState = "group";
+}
+else if(CS.hasClass("thumbnail_label_c_hidden_show")){
+currState = "hidden";
+}
+else if(CS.hasClass("thumbnail_label_offline")){
+currState = "away";
+}
+
+var modelname = $(li).find('div.title a').text().trim();
+
+onlineModels.set(modelname, currState);
+
+});
+
+
   })
   .catch(function(err) {
     common.errMsg(me, err.toString());
@@ -83,7 +114,7 @@ module.exports = {
     return findOnlineModels();
   },
 
-  checkModelState: function(nm) {
+checkModelState: function(nm) {
     return Promise.try(function() {
       var msg = colors.model(nm);
       var isBroadcasting = 0;
@@ -95,6 +126,8 @@ module.exports = {
           isBroadcasting = 1;
         } else if (currState === 'private') {
           msg = msg + ' is in a private show.';
+        } else if (currState === 'group') {
+          msg = msg + ' is in a group show.';
         } else if (currState === 'away') {
           msg = msg + colors.model('\'s') + ' cam is off.';
         } else if (currState === 'hidden') {
@@ -177,5 +210,3 @@ module.exports = {
     });
   }
 };
-
-
