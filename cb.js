@@ -18,40 +18,33 @@ function findOnlineModels() {
   return Promise.try(function() {
     return bhttp.get('https://chaturbate.com/tours/3/?c=10000');
   }).then(function(response) {
-  
-onlineModels = new Map();
-	  
-var $ = cheerio.load(response.body);
 
-$('ul.list li').each(function(i,li){
+    onlineModels = new Map();
 
-var CS = $(li).find('div.thumbnail_label');
+    var $ = cheerio.load(response.body);
 
-var currState = "away";
+    $('ul.list li').each(function(i,li) {
 
-if(CS.hasClass("thumbnail_label_c_hd") || CS.hasClass("thumbnail_label_c_new") || CS.hasClass("thumbnail_label_exhibitionist") || CS.hasClass("thumbnail_label_c")){
-currState = "public";
-}
-else if(CS.hasClass("thumbnail_label_c_private_show")){
-currState = "private";
-}
-else if(CS.hasClass("thumbnail_label_c_group_show")){
-currState = "group";
-}
-else if(CS.hasClass("thumbnail_label_c_hidden_show")){
-currState = "hidden";
-}
-else if(CS.hasClass("thumbnail_label_offline")){
-currState = "away";
-}
+      var cs = $(li).find('div.thumbnail_label');
 
-var modelname = $(li).find('div.title a').text().trim();
+      var currState = "away";
 
-onlineModels.set(modelname, currState);
+      if (cs.hasClass("thumbnail_label_c_hd") || cs.hasClass("thumbnail_label_c_new") || cs.hasClass("thumbnail_label_exhibitionist") || cs.hasClass("thumbnail_label_c")) {
+        currState = "public";
+      } else if (cs.hasClass("thumbnail_label_c_private_show")) {
+        currState = "private";
+      } else if (cs.hasClass("thumbnail_label_c_group_show")) {
+        currState = "group";
+      } else if (cs.hasClass("thumbnail_label_c_hidden_show")) {
+        currState = "hidden";
+      } else if (cs.hasClass("thumbnail_label_offline")) {
+        currState = "away";
+      }
 
-});
+      var modelname = $(li).find('div.title a').text().trim();
 
-
+      onlineModels.set(modelname, currState);
+    });
   })
   .catch(function(err) {
     common.errMsg(me, err.toString());
