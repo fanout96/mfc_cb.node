@@ -16,7 +16,7 @@ var currentlyCapping = new Map();
 
 function findOnlineModels() {
   return Promise.try(function() {
-    return bhttp.get('https://chaturbate.com/tours/3/?c=10000');
+    return bhttp.get('https://chaturbate.com/tours/3/?c=10000', {responseTimeout: 20000});
   }).then(function(response) {
 
     onlineModels = new Map();
