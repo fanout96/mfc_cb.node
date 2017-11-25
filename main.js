@@ -228,7 +228,7 @@ function postProcess(site, filename, model) {
   }
 
   var mySpawnArguments;
-  if (config.autoConvertType == 'mp4') {
+  if (config.autoConvertType === 'mp4') {
     mySpawnArguments = [
       '-hide_banner',
       '-v',
@@ -242,7 +242,7 @@ function postProcess(site, filename, model) {
       '-copyts',
       modelDir + '/' + filename + '.' + config.autoConvertType
     ];
-  } else if (config.autoConvertType == 'mkv') {
+  } else if (config.autoConvertType === 'mkv') {
     mySpawnArguments = [
       '-hide_banner',
       '-v',
@@ -266,6 +266,7 @@ function postProcess(site, filename, model) {
     if (!config.keepTsFile) {
       fs.unlinkSync(config.captureDirectory + '/' + filename + '.ts');
     }
+    common.msg(site, colors.model(model.nm) + 'done converting ' + filename + '.' + config.autoConvertType);
     semaphore--; // release semaphore only when ffmpeg process has ended
   });
 
@@ -290,7 +291,7 @@ function startCapture(site, spawnArgs, filename, model) {
         notifier.notify({ title: 'mfc_cb.node', message: model.nm + ' recording stopped'});
       }
       if (err) {
-        if (err.code == 'ENOENT') {
+        if (err.code === 'ENOENT') {
           common.errMsg(site, colors.model(model.nm) + ', ' + filename + '.ts not found in capturing directory, cannot convert to ' + config.autoConvertType);
         } else {
           common.errMsg(site, colors.model(model.nm) + ': ' + err.toString());
