@@ -22,7 +22,7 @@ function haltCapture(model) {
 module.exports = {
 
   create: function(myself) {
-    mfcGuest = new mfc.Client();
+    mfcGuest = new mfc.Client("guest", "guest", {useWebSockets: true});
     me = myself;
   },
 

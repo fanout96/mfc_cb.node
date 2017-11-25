@@ -356,12 +356,9 @@ function mainSiteLoop(site) {
           caps.push(cap);
         }
         return Promise.all(caps);
-      } else {
-        return;
       }
-    } else {
-      return;
     }
+    return;
   })
   .catch(function(err) {
     common.errMsg(site, err);
