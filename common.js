@@ -102,7 +102,7 @@ module.exports = {
   },
 
   getCaptureArguments: function(url, filename) {
-    var spawnArgs = [
+    return [
       '-hide_banner',
       '-v',
       'fatal',
@@ -118,7 +118,6 @@ module.exports = {
       '500k',
       config.captureDirectory + '/' + filename + '.ts'
     ];
-    return spawnArgs;
   },
 
   msg: function(site, themsg) {
