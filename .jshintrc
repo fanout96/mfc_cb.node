@@ -1,11 +1,11 @@
 {
     "curly"      : true,
+    "eqeqeq"     : true,
     "forin"      : true,
     "freeze"     : true,
-    "immed"      : true,
     "latedef"    : true,
     "loopfunc"   : true,
-    "quotmark"   : true,
+    "strict"     : true,
     "unused"     : true,
     "undef"      : true,
 

@@ -1,156 +1,224 @@
-'use strict';
+const Promise = require("bluebird");
+const mfc     = require("MFCAuto");
+const site    = require("./site");
+const _       = require("underscore");
+const fs      = require("fs");
+const yaml    = require("js-yaml");
+const colors  = require("colors/safe");
 
-var Promise = require('bluebird');
-var colors  = require('colors/safe');
-var mfc     = require('MFCAuto');
-var common  = require('./common');
+class Mfc extends site.Site {
+    constructor(config) {
+        super("MFC", config, "_mfc");
+        this.mfcGuest = new mfc.Client("guest", "guest", {useWebSockets: true, camYou: false});
+    }
 
-var mfcGuest;
-var me; // backpointer for common print methods
+    connect() {
+        const mfcGuest = this.mfcGuest;
 
-var modelsToCap = [];
-var modelState = new Map();
-var currentlyCapping = new Map();
+        return Promise.try(function() {
+            return mfcGuest.connectAndWaitForModels();
+        }).catch(function(err) {
+            return err;
+        });
+    }
 
-function haltCapture(model) {
-  if (currentlyCapping.has(model.uid)) {
-    var capInfo = currentlyCapping.get(model.uid);
-    capInfo.captureProcess.kill('SIGINT');
-  }
+    disconnect() {
+        this.mfcGuest.disconnect();
+    }
+
+    queryUser(nm) {
+        return this.mfcGuest.queryUser(nm);
+    }
+
+    processUpdates() {
+        const stats = fs.statSync("updates.yml");
+
+        let includeModels = [];
+        let excludeModels = [];
+
+        if (stats.isFile()) {
+            const updates = yaml.safeLoad(fs.readFileSync("updates.yml", "utf8"));
+
+            if (!updates.includeMfcModels) {
+                updates.includeMfcModels = [];
+            } else if (updates.includeMfcModels.length > 0) {
+                this.msg(updates.includeMfcModels.length + " model(s) to include");
+                includeModels = updates.includeMfcModels;
+                updates.includeMfcModels = [];
+            }
+
+            if (!updates.excludeMfcModels) {
+                updates.excludeMfcModels = [];
+            } else if (updates.excludeMfcModels.length > 0) {
+                this.msg(updates.excludeMfcModels.length + " model(s) to exclude");
+                excludeModels = updates.excludeMfcModels;
+                updates.excludeMfcModels = [];
+            }
+
+            // if there were some updates, then rewrite updates.yml
+            if (includeModels.length > 0 || excludeModels.length > 0) {
+                fs.writeFileSync("updates.yml", yaml.safeDump(updates), "utf8");
+            }
+        }
+
+        return {includeModels: includeModels, excludeModels: excludeModels, dirty: false};
+    }
+
+    addModel(model) {
+        if (super.addModel(model.uid, model.nm, this.config.mfcmodels)) {
+            this.config.mfcmodels.push(model.uid);
+            return true;
+        }
+        return false;
+    }
+
+    addModels(bundle) {
+        // Fetch the UID of new models to add to capture list.
+        // The model does not have to be online for this.
+        const queries = [];
+
+        for (let i = 0; i < bundle.includeModels.length; i++) {
+            this.msg("Checking if " + colors.model(bundle.includeModels[i]) + " exists.");
+            const query = this.queryUser(bundle.includeModels[i]).then((model) => {
+                if (typeof model !== "undefined") {
+                    bundle.dirty |= this.addModel(model);
+                } else {
+                    this.errMsg("Could not find model");
+                }
+            });
+            queries.push(query);
+        }
+
+        return Promise.all(queries).then(function() {
+            return bundle;
+        });
+    }
+
+    removeModel(model) {
+        this.config.mfcmodels = _.without(this.config.mfcmodels, model.uid);
+        return super.removeModel(model);
+    }
+
+    removeModels(bundle) {
+        // Fetch the UID of current models to be excluded from capture list.
+        // The model does not have to be online for this.
+        const queries = [];
+
+        for (let i = 0; i < bundle.excludeModels.length; i++) {
+            const query = this.queryUser(bundle.excludeModels[i]).then((model) => {
+                if (typeof model !== "undefined") {
+                    bundle.dirty |= this.removeModel(model);
+                }
+            });
+            queries.push(query);
+        }
+
+        return Promise.all(queries).then(function() {
+            return bundle.dirty;
+        });
+    }
+
+    checkModelState(uid) {
+        const me = this;
+
+        return Promise.try(function() {
+            return me.mfcGuest.queryUser(uid);
+        }).then(function(model) {
+            if (model !== undefined) {
+                let isBroadcasting = 0;
+                let msg = colors.model(model.nm);
+
+                if (model.vs === mfc.STATE.FreeChat) {
+                    msg += " is in public chat!";
+                    me.modelsToCap.push(model);
+                    isBroadcasting = 1;
+                } else if (model.vs === mfc.STATE.GroupShow) {
+                    msg += " is in a group show";
+                } else if (model.vs === mfc.STATE.Private) {
+                    if (model.truepvt === 1) {
+                        msg += " is in a true private show.";
+                    } else {
+                        msg += " is in a private show.";
+                    }
+                } else if (model.vs === mfc.STATE.Away) {
+                    msg += " is away.";
+                } else if (model.vs === mfc.STATE.Online) {
+                    msg += colors.model("'s") + " cam is off.";
+                } else if (model.vs === mfc.STATE.Offline) {
+                    msg += " has logged off.";
+                }
+                if ((me.modelState.has(uid) || model.vs !== mfc.STATE.Offline) && model.vs !== me.modelState.get(uid)) {
+                    me.msg(msg);
+                }
+                me.modelState.set(uid, model.vs);
+                if (me.currentlyCapping.has(model.uid) && isBroadcasting === 0) {
+                    // Sometimes the ffmpeg process doesn't end when a model
+                    // stops broadcasting, so terminate it.
+                    me.dbgMsg(colors.model(model.nm) + " is not broadcasting, but ffmpeg is still active. Terminating with SIGINT.");
+                    me.haltCapture(model.uid);
+                }
+            }
+            return true;
+        }).catch(function(err) {
+            me.errMsg(err.toString());
+            return err;
+        });
+    }
+
+    getModelsToCap() {
+        const queries = [];
+        const me = this;
+
+        me.modelsToCap = [];
+
+        for (let i = 0; i < me.config.mfcmodels.length; i++) {
+            queries.push(me.checkModelState(me.config.mfcmodels[i]));
+        }
+
+        return Promise.all(queries).then(function() {
+            return me.modelsToCap;
+        });
+    }
+
+    setupCapture(model, tryingToExit) {
+        const me = this;
+
+        if (!super.setupCapture(model, tryingToExit)) {
+            return Promise.try(function() {
+                return {spawnArgs: "", filename: "", model: ""};
+            });
+        }
+
+        return Promise.try(function() {
+            const filename = me.getFileName(model.nm);
+            const spawnArgs = me.getCaptureArguments("http://video" + (model.u.camserv - 500) + ".myfreecams.com:1935/NxServer/ngrp:mfc_" + (100000000 + model.uid) + ".f4v_mobile/playlist.m3u8", filename);
+
+            return {spawnArgs: spawnArgs, filename: filename, model: model};
+        }).catch(function(err) {
+            me.errMsg(colors.model(model.nm) + " " + err.toString());
+            return err;
+        });
+    }
+
+    recordModels(modelsToCap, tryingToExit) {
+        if (modelsToCap !== null && modelsToCap.length > 0) {
+            const caps = [];
+            const me = this;
+
+            this.dbgMsg(modelsToCap.length + " model(s) to capture");
+            for (let i = 0; i < modelsToCap.length; i++) {
+                const cap = this.setupCapture(modelsToCap[i], tryingToExit).then(function(bundle) {
+                    if (bundle.spawnArgs !== "") {
+                        me.startCapture(bundle.spawnArgs, bundle.filename, bundle.model, tryingToExit);
+                    }
+                });
+                caps.push(cap);
+            }
+            return Promise.all(caps);
+        }
+        return null;
+    }
+
 }
 
-module.exports = {
-
-  create: function(myself) {
-    mfcGuest = new mfc.Client("guest", "guest", {useWebSockets: true});
-    me = myself;
-  },
-
-  connect: function() {
-    return Promise.try(function() {
-      return mfcGuest.connectAndWaitForModels();
-    }).catch(function(err) {
-      return err;
-    });
-  },
-
-  disconnect: function() {
-    mfcGuest.disconnect();
-  },
-
-  getOnlineModels: function() {
-    return Promise.try(function() {
-      return mfc.Model.findModels((m) => m.bestSession.vs !== mfc.STATE.Offline);
-    })
-    .catch(function(err) {
-      common.errMsg(me, err.toString());
-    });
-  },
-
-  queryUser: function(nm) {
-    return mfcGuest.queryUser(nm);
-  },
-
-  getModelsToCap: function() {
-    return modelsToCap;
-  },
-
-  clearMyModels: function() {
-    modelsToCap = [];
-  },
-
-  haltCapture: function(model) {
-    haltCapture(model);
-  },
-
-  checkModelState: function(uid) {
-    return Promise.try(function() {
-      return mfcGuest.queryUser(uid);
-    }).then(function(model) {
-      if (model !== undefined) {
-        var isBroadcasting = 0;
-        var msg = colors.model(model.nm);
-        if (model.vs === mfc.STATE.FreeChat) {
-          msg = msg + ' is in public chat!';
-          modelsToCap.push(model);
-          isBroadcasting = 1;
-        } else if (model.vs === mfc.STATE.GroupShow) {
-          msg = msg + ' is in a group show';
-        } else if (model.vs === mfc.STATE.Private) {
-          if (model.truepvt === 1) {
-            msg = msg + ' is in a true private show.';
-          } else {
-            msg = msg + ' is in a private show.';
-          }
-        } else if (model.vs === mfc.STATE.Away) {
-          msg = msg + ' is away.';
-        } else if (model.vs === mfc.STATE.Online) {
-          msg = msg + colors.model('\'s') + ' cam is off.';
-        } else if (model.vs === mfc.STATE.Offline) {
-          msg = msg + ' has logged off.';
-        }
-        if ((modelState.has(uid) || model.vs !== mfc.STATE.Offline) && model.vs !== modelState.get(uid)) {
-          common.msg(me, msg);
-        }
-        modelState.set(uid, model.vs);
-        if (currentlyCapping.has(model.uid) && isBroadcasting === 0) {
-          // Sometimes the ffmpeg process doesn't end when a model
-          // stops broadcasting, so terminate it.
-          common.dbgMsg(me, colors.model(model.nm) + ' is not broadcasting, but ffmpeg is still active. Terminating with SIGINT.');
-          haltCapture(model);
-        }
-      }
-      return true;
-    })
-    .catch(function(err) {
-      common.errMsg(me, err.toString());
-    });
-  },
-
-  addModelToCapList: function(model, filename, captureProcess) {
-    if (currentlyCapping.has(model.uid)) {
-      common.errMsg(me, colors.model(model.nm) + ' is already capturing, terminating current capture, if this happens please report a bug on github with full debug logs');
-      haltCapture(model);
-    }
-    currentlyCapping.set(model.uid, {nm: model.nm, filename: filename, captureProcess: captureProcess});
-  },
-
-  removeModelFromCapList: function(model) {
-    currentlyCapping.delete(model.uid);
-  },
-
-  getNumCapsInProgress: function() {
-    return currentlyCapping.size;
-  },
-
-  checkFileSize: function(captureDirectory, maxByteSize) {
-    common.checkFileSize(me, captureDirectory, maxByteSize, currentlyCapping);
-  },
-
-  setupCapture: function(model, tryingToExit) {
-    if (currentlyCapping.has(model.uid)) {
-      common.dbgMsg(me, colors.model(model.nm) + ' is already capturing');
-      return Promise.try(function() {
-        return {spawnArgs: '', filename: '', model: ''};
-      });
-    }
-
-    if (tryingToExit) {
-      common.dbgMsg(me, colors.model(model.nm) + ' capture not starting due to ctrl+c');
-      return Promise.try(function() {
-        return {spawnArgs: '', filename: '', model: ''};
-      });
-    }
-
-    return Promise.try(function() {
-      var filename = common.getFileName(me, model.nm);
-      var spawnArgs = common.getCaptureArguments('http://video' + (model.u.camserv - 500) + '.myfreecams.com:1935/NxServer/ngrp:mfc_' + (100000000 + model.uid) + '.f4v_mobile/playlist.m3u8', filename);
-
-      return {spawnArgs: spawnArgs, filename: filename, model: model};
-    })
-    .catch(function(err) {
-      common.errMsg(me, colors.model(model.nm) + ': ' + err.toString());
-    });
-  }
-};
-
+exports.Mfc = Mfc;
