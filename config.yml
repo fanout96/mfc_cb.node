@@ -1,5 +1,5 @@
-captureDirectory: /home/jason/repos/mfc_cb.node/capturing
-completeDirectory: /home/jason/repos/mfc_cb.node/captured
+captureDirectory: capturing
+completeDirectory: captured
 modelSubdir: true
 modelScanInterval: 300
 autoConvertType: mp4
@@ -21,12 +21,6 @@ enableCB: true
 mfcmodels:
   - 3623822
   - 12513225
-  - 5386955
-  - 3401780
-  - 10681348
-  - 19408302
-  - 23031083
-  - 17471796
 cbmodels:
   - aynmarie
   - theemilygrey
