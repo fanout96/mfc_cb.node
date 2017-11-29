@@ -90,7 +90,7 @@
         "indent-legacy": "error",
         "init-declarations": "off",
         "jsx-quotes": "error",
-        "key-spacing": "error",
+        "key-spacing": "off",
         "keyword-spacing": [
             "error",
             {

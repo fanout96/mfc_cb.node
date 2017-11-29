@@ -94,22 +94,22 @@ config.completeDirectory = path.resolve(config.completeDirectory);
 
 mkdirp(config.captureDirectory, function(err) {
     if (err) {
-        console.log(err);
+        console.log(err.toString());
         process.exit(1);
     }
 });
 
 mkdirp(config.completeDirectory, function(err) {
     if (err) {
-        console.log(err);
+        console.log(err.toString());
         process.exit(1);
     }
 });
 
 colors.setTheme({
     model: config.modelcolor,
-    time: config.timecolor,
-    site: config.sitecolor,
+    time:  config.timecolor,
+    site:  config.sitecolor,
     debug: config.debugcolor,
     error: config.errorcolor
 });

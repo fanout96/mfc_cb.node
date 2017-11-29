@@ -13,11 +13,12 @@ class Mfc extends site.Site {
     }
 
     connect() {
-        const mfcGuest = this.mfcGuest;
+        const me = this;
 
         return Promise.try(function() {
-            return mfcGuest.connectAndWaitForModels();
+            return me.mfcGuest.connectAndWaitForModels();
         }).catch(function(err) {
+            me.errMsg(err.toString());
             return err;
         });
     }
@@ -191,7 +192,8 @@ class Mfc extends site.Site {
 
         return Promise.try(function() {
             const filename = me.getFileName(model.nm);
-            const spawnArgs = me.getCaptureArguments("http://video" + (model.u.camserv - 500) + ".myfreecams.com:1935/NxServer/ngrp:mfc_" + (100000000 + model.uid) + ".f4v_mobile/playlist.m3u8", filename);
+            const url = "http://video" + (model.u.camserv - 500) + ".myfreecams.com:1935/NxServer/ngrp:mfc_" + (100000000 + model.uid) + ".f4v_mobile/playlist.m3u8";
+            const spawnArgs = me.getCaptureArguments(url, filename);
 
             return {spawnArgs: spawnArgs, filename: filename, model: model};
         }).catch(function(err) {
@@ -218,7 +220,7 @@ class Mfc extends site.Site {
         }
         return null;
     }
-
 }
 
 exports.Mfc = Mfc;
+
