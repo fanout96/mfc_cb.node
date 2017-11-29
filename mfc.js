@@ -79,7 +79,7 @@ class Mfc extends site.Site {
         const queries = [];
 
         for (let i = 0; i < bundle.includeModels.length; i++) {
-            this.msg("Checking if " + colors.model(bundle.includeModels[i]) + " exists.");
+            this.dbgMsg("Checking if " + colors.model(bundle.includeModels[i]) + " exists.");
             const query = this.queryUser(bundle.includeModels[i]).then((model) => {
                 if (typeof model !== "undefined") {
                     bundle.dirty |= this.addModel(model);
