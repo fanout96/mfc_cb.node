@@ -8,8 +8,8 @@ const yaml    = require("js-yaml");
 const site    = require("./site");
 
 class Cb extends site.Site {
-    constructor(config) {
-        super("CB ", config, "_cb");
+    constructor(config, screen, logbody, body) {
+        super("CB ", config, "_cb", screen, logbody, body);
         this.onlineModels = new Map();
         this.timeOut = 20000;
         this.session = bhttp.session();
@@ -168,6 +168,7 @@ class Cb extends site.Site {
             if (currState === "public") {
                 msg += " is in public chat!";
                 this.modelsToCap.push({uid: nm, nm: nm});
+                this.render();
                 isBroadcasting = 1;
             } else if (currState === "private") {
                 msg += " is in a private show.";

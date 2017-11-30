@@ -7,7 +7,7 @@ const colors       = require("colors/safe");
 const childProcess = require("child_process");
 
 class Site {
-    constructor(siteName, config, siteDir) {
+    constructor(siteName, config, siteDir, screen, logbody, body) {
         this.semaphore = 0;
         this.siteName = siteName;
         this.config = config;
@@ -16,6 +16,9 @@ class Site {
         this.modelState = new Map();
         this.currentlyCapping = new Map();
         this.siteDir = siteDir;
+        this.screen = screen;
+        this.logbody = logbody;
+        this.body = body;
     }
 
     getSiteName() {
@@ -99,6 +102,13 @@ class Site {
 
     getNumCapsInProgress() {
         return this.currentlyCapping.size;
+    }
+
+    haltAllCaptures() {
+        this.msg("aborting");
+        this.currentlyCapping.forEach(function(value) {
+            value.captureProcess.kill("SIGINT");
+        });
     }
 
     haltCapture(index) {
@@ -234,7 +244,8 @@ class Site {
     }
 
     msg(msg) {
-        console.log(colors.time("[" + this.getDateTime() + "]"), colors.site(this.siteName), msg);
+        this.logbody.pushLine(colors.time("[" + this.getDateTime() + "]") + " " + colors.site(this.siteName) + " " + msg);
+        this.screen.render();
     }
 
     errMsg(msg) {
@@ -244,6 +255,12 @@ class Site {
     dbgMsg(msg) {
         if (this.config.debug) {
             this.msg(colors.debug("[DEBUG] ") + msg);
+        }
+    }
+
+    render() {
+        for (let i=0; i < this.modelsToCap.length; i++) {
+            this.body.setLine(i, colors.model(this.modelsToCap[i].nm));
         }
     }
 }
