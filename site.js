@@ -281,6 +281,7 @@ class Site {
 
     msg(msg) {
         this.logbody.pushLine(colors.time("[" + this.getDateTime() + "]") + " " + colors.site(this.siteName) + " " + msg);
+        this.logbody.setScrollPerc(100);
         this.screen.render();
     }
 
