@@ -191,7 +191,7 @@ class Cb extends site.Site {
         }
 
         if (this.currentlyCapping.has(nm) && isBroadcasting === 0) {
-            this.dbgMsg(colors.model(nm) + " is not broadcasting, but ffmpeg is still active. Terminating with SIGINT.");
+            this.dbgMsg(colors.model(nm) + " is no longer broadcasting, ending ffmpeg process.");
             this.haltCapture(nm);
         }
 

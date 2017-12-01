@@ -9,7 +9,7 @@ const yaml       = require("js-yaml");
 const mkdirp     = require("mkdirp");
 const colors     = require("colors/safe");
 const path       = require("path");
-const blessed    = require('blessed');
+const blessed    = require("blessed");
 
 // local libraries
 const MFC        = require("./mfc");
@@ -18,15 +18,15 @@ const CB         = require("./cb");
 let tryingToExit = 0;
 const config     = yaml.safeLoad(fs.readFileSync("config.yml", "utf8"));
 
-let mfc;
-let cb;
+let mfc = null;
+let cb = null;
 const SITES = [];
 
-var screen = blessed.screen();
-var logbody = blessed.box({
-    top: "75%",
+const screen = blessed.screen();
+const logbody = blessed.box({
+    top: "66%",
     left: 0,
-    height: "25%-1",
+    height: "34%",
     width: "100%",
     keys: true,
     mouse: true,
@@ -37,7 +37,7 @@ var logbody = blessed.box({
         bg: "red"
     }
 });
-var inputBar = blessed.textbox({
+const inputBar = blessed.textbox({
     bottom: 0,
     left: 0,
     height: 1,
@@ -51,16 +51,16 @@ var inputBar = blessed.textbox({
     }
 });
 
-inputBar.on('submit', (text) => {
-    log(text);
-    inputBar.clearValue();
-});
-
 // Add text to body (replacement for console.log)
 function log(text) {
     logbody.pushLine(text);
     screen.render();
 }
+
+inputBar.on("submit", (text) => {
+    log(text);
+    inputBar.clearValue();
+});
 
 function sleep(time) {
     return new Promise((resolve) => setTimeout(resolve, time));
@@ -102,9 +102,8 @@ function busy() {
 }
 
 function tryExit() {
-    // SIGINT will get passed to any running ffmpeg captures.
-    // Must delay exiting until the capture and postProcess
-    // for all models have finished.  Keep checking every 1s
+    // delay exiting until ffmpeg process ends and
+    // postprocess jobs finish.
     if (!busy()) {
         if (config.enableMFC) {
             mfc.disconnect();
@@ -131,12 +130,13 @@ function exit() {
     }
 }
 
-screen.key('enter', (ch, key) => {
+screen.key("enter", () => {
     inputBar.focus();
 });
 
 // Close on escape, q, or ctrl+c
-screen.key(["escape", "q", "C-c"], (ch, key) => (
+// Note: screen intercepts ctrl+c and it does not pass down to ffmpeg
+screen.key(["escape", "q", "C-c"], () => (
     exit()
 ));
 

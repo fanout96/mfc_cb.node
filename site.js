@@ -5,7 +5,7 @@ const mv           = require("mv");
 const moment       = require("moment");
 const colors       = require("colors/safe");
 const childProcess = require("child_process");
-const blessed      = require('blessed');
+const blessed      = require("blessed");
 
 class Site {
     constructor(siteName, config, siteDir, screen, logbody, num) {
@@ -22,19 +22,19 @@ class Site {
 
         this.title = blessed.box({
             top: 0,
-            left: num == 2 ? "50%" : 0,
+            left: num === 2 ? "50%" : 0,
             height: 1,
             width: "50%",
             keys: false,
             mouse: false,
             alwaysScroll: false,
-            scrollable: false,
+            scrollable: false
         });
 
         this.list = blessed.box({
             top: 1,
-            left: num == 2 ? "50%" : 0,
-            height: "75%-1",
+            left: num === 2 ? "50%" : 0,
+            height: "66%-1",
             width: "50%",
             keys: true,
             mouse: true,
@@ -47,7 +47,7 @@ class Site {
             border : {
                 type: "line",
                 fg: "blue"
-            },
+            }
         });
 
         screen.append(this.title);
@@ -296,7 +296,7 @@ class Site {
     }
 
     render() {
-        let me = this;
+        const me = this;
 
         // TODO: Hack
         for (let i = 0; i < 100; i++) {

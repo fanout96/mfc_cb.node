@@ -156,7 +156,7 @@ class Mfc extends site.Site {
                 if (me.currentlyCapping.has(model.uid) && isBroadcasting === 0) {
                     // Sometimes the ffmpeg process doesn't end when a model
                     // stops broadcasting, so terminate it.
-                    me.dbgMsg(colors.model(model.nm) + " is not broadcasting, but ffmpeg is still active. Terminating with SIGINT.");
+                    me.dbgMsg(colors.model(model.nm) + " is no longer broadcasting, ending ffmpeg process.");
                     me.haltCapture(model.uid);
                 }
             }
