@@ -10,7 +10,7 @@ class Mfc extends site.Site {
     constructor(config, screen, logbody, body) {
         super("MFC", config, "_mfc", screen, logbody, body);
         mfc.setLogLevel(0);
-        this.mfcGuest = new mfc.Client("guest", "guest", {useWebSockets: true, camYou: false});
+        this.mfcGuest = new mfc.Client("guest", "guest", {useWebSockets: false, camYou: false});
     }
 
     connect() {
@@ -133,7 +133,6 @@ class Mfc extends site.Site {
                 if (model.vs === mfc.STATE.FreeChat) {
                     msg += " is in public chat!";
                     me.modelsToCap.push(model);
-                    me.render();
                     isBroadcasting = 1;
                 } else if (model.vs === mfc.STATE.GroupShow) {
                     msg += " is in a group show";

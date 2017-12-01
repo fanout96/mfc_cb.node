@@ -23,30 +23,10 @@ let cb;
 const SITES = [];
 
 var screen = blessed.screen();
-var mfctitle = blessed.box({
-    top: 0,
-    left: 0,
-    height: 1,
-    width: "50%",
-    keys: true,
-    mouse: true,
-    alwaysScroll: false,
-    scrollable: false,
-});
-var cbtitle = blessed.box({
-    top: 0,
-    left: "50%",
-    height: 1,
-    width: "50%",
-    keys: true,
-    mouse: true,
-    alwaysScroll: false,
-    scrollable: false,
-});
 var logbody = blessed.box({
-    top: "100%-9",
+    top: "75%",
     left: 0,
-    height: 8,
+    height: "25%-1",
     width: "100%",
     keys: true,
     mouse: true,
@@ -55,46 +35,6 @@ var logbody = blessed.box({
     scrollbar: {
         ch: " ",
         bg: "red"
-    }
-});
-var mfcbody = blessed.box({
-    top: 1,
-    left: 0,
-    height: "100%-10",
-    width: "50%",
-    keys: true,
-    mouse: true,
-    alwaysScroll: true,
-    scrollable: true,
-    scrollbar: {
-        ch: " ",
-        bg: "red"
-    },
-    border : {
-        type: "line",
-        fg: "blue"
-    },
-    hover: {
-        fg: "white",
-        bg: "blue"
-    }
-});
-var cbbody = blessed.box({
-    top: 1,
-    left: "50%",
-    height: "100%-10",
-    width: "50%",
-    keys: true,
-    mouse: true,
-    alwaysScroll: true,
-    scrollable: true,
-    scrollbar: {
-        ch: " ",
-        bg: "red"
-    },
-    border : {
-        type: "line",
-        fg: "blue"
     }
 });
 var inputBar = blessed.textbox({
@@ -111,28 +51,16 @@ var inputBar = blessed.textbox({
     }
 });
 
-// Add body to blessed screen
-screen.append(mfctitle);
-screen.append(cbtitle);
-screen.append(mfcbody);
-screen.append(cbbody);
-screen.append(logbody);
-screen.append(inputBar);
+inputBar.on('submit', (text) => {
+    log(text);
+    inputBar.clearValue();
+});
 
 // Add text to body (replacement for console.log)
 function log(text) {
     logbody.pushLine(text);
     screen.render();
 }
-
-inputBar.on('submit', (text) => {
-    log(text);
-    inputBar.clearValue();
-});
-
-screen.key('enter', (ch, key) => {
-    inputBar.focus();
-});
 
 function sleep(time) {
     return new Promise((resolve) => setTimeout(resolve, time));
@@ -203,7 +131,11 @@ function exit() {
     }
 }
 
-// Close the example on Escape, Q, or Ctrl+C
+screen.key('enter', (ch, key) => {
+    inputBar.focus();
+});
+
+// Close on escape, q, or ctrl+c
 screen.key(["escape", "q", "C-c"], (ch, key) => (
     exit()
 ));
@@ -237,18 +169,14 @@ colors.setTheme({
     error: config.errorcolor
 });
 
-mfctitle.pushLine(colors.site("MyFreeCams"));
-cbtitle.pushLine(colors.site("Chaturbate"));
-//mfcbody.setHover("MyFreeCams");
-//cbbody.setHover("Chaturbate");
+mfc = new MFC.Mfc(config, screen, logbody, 1);
+cb  = new CB.Cb(config,   screen, logbody, 2);
 
 if (config.enableMFC) {
-    mfc = new MFC.Mfc(config, screen, logbody, mfcbody);
     SITES.push(mfc);
     Promise.try(function() {
         return mfc.connect();
     }).then(function() {
-        mfc.msg(config.mfcmodels.length + " model(s) in config");
         mainSiteLoop(mfc);
     }).catch(function(err) {
         mfc.errMsg(err);
@@ -257,9 +185,13 @@ if (config.enableMFC) {
 }
 
 if (config.enableCB) {
-    cb = new CB.Cb(config, screen, logbody, cbbody);
     SITES.push(cb);
-    cb.msg(config.cbmodels.length + " model(s) in config");
     mainSiteLoop(cb);
 }
+
+screen.append(logbody);
+screen.append(inputBar);
+
+mfc.msg(config.mfcmodels.length + " model(s) in config");
+cb.msg(config.cbmodels.length + " model(s) in config");
 

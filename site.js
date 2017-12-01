@@ -5,9 +5,10 @@ const mv           = require("mv");
 const moment       = require("moment");
 const colors       = require("colors/safe");
 const childProcess = require("child_process");
+const blessed      = require('blessed');
 
 class Site {
-    constructor(siteName, config, siteDir, screen, logbody, body) {
+    constructor(siteName, config, siteDir, screen, logbody, num) {
         this.semaphore = 0;
         this.siteName = siteName;
         this.config = config;
@@ -18,7 +19,41 @@ class Site {
         this.siteDir = siteDir;
         this.screen = screen;
         this.logbody = logbody;
-        this.body = body;
+
+        this.title = blessed.box({
+            top: 0,
+            left: num == 2 ? "50%" : 0,
+            height: 1,
+            width: "50%",
+            keys: false,
+            mouse: false,
+            alwaysScroll: false,
+            scrollable: false,
+        });
+
+        this.list = blessed.box({
+            top: 1,
+            left: num == 2 ? "50%" : 0,
+            height: "75%-1",
+            width: "50%",
+            keys: true,
+            mouse: true,
+            alwaysScroll: true,
+            scrollable: true,
+            scrollbar: {
+                ch: " ",
+                bg: "red"
+            },
+            border : {
+                type: "line",
+                fg: "blue"
+            },
+        });
+
+        screen.append(this.title);
+        screen.append(this.list);
+
+        this.title.pushLine(colors.site(this.siteName));
     }
 
     getSiteName() {
@@ -30,13 +65,12 @@ class Site {
     }
 
     getFileName(nm) {
-        let filename;
+        let filename = nm + "_";
 
         if (this.config.includeSiteInFile) {
-            filename = nm + "_" + this.siteName.trim().toLowerCase() + "_" + this.getDateTime();
-        } else {
-            filename = nm + "_" + this.getDateTime();
+            filename += this.siteName.trim().toLowerCase() + "_";
         }
+        filename += this.getDateTime();
         return filename;
     }
 
@@ -94,10 +128,12 @@ class Site {
 
     addModelToCapList(model, filename, captureProcess) {
         this.currentlyCapping.set(model.uid, {nm: model.nm, filename: filename, captureProcess: captureProcess});
+        this.render();
     }
 
     removeModelFromCapList(model) {
         this.currentlyCapping.delete(model.uid);
+        this.render();
     }
 
     getNumCapsInProgress() {
@@ -259,9 +295,18 @@ class Site {
     }
 
     render() {
-        for (let i=0; i < this.modelsToCap.length; i++) {
-            this.body.setLine(i, colors.model(this.modelsToCap[i].nm));
+        let me = this;
+
+        // TODO: Hack
+        for (let i = 0; i < 100; i++) {
+            me.list.deleteLine(0);
         }
+
+        this.currentlyCapping.forEach(function(value) {
+            me.list.pushLine(colors.model(value.nm));
+        });
+
+        this.screen.render();
     }
 }
 

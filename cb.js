@@ -168,7 +168,6 @@ class Cb extends site.Site {
             if (currState === "public") {
                 msg += " is in public chat!";
                 this.modelsToCap.push({uid: nm, nm: nm});
-                this.render();
                 isBroadcasting = 1;
             } else if (currState === "private") {
                 msg += " is in a private show.";
