@@ -42,6 +42,8 @@ class Site {
             mouse: true,
             alwaysScroll: true,
             scrollable: true,
+            draggable: false,
+            shadow: false,
             scrollbar: {
                 ch: " ",
                 bg: "red"
@@ -56,6 +58,24 @@ class Site {
         screen.append(this.list);
 
         this.title.pushLine(colors.site(this.siteName));
+    }
+
+    hide() {
+        this.title.hide();
+        this.list.hide();
+    }
+
+    show() {
+        this.title.show();
+        this.list.show();
+    }
+
+    full() {
+        this.list.height = "100%-2";
+    }
+
+    restore() {
+        this.list.height = "66%-1";
     }
 
     getSiteName() {

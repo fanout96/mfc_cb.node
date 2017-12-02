@@ -57,38 +57,53 @@ function log(text) {
     screen.render();
 }
 
+function showlist() {
+    for (let i = 0; i < SITES.length; i++) {
+        SITES[i].show();
+    }
+    logbody.top = "66%";
+    logbody.height = "34%";
+}
+
+function hidelist() {
+    for (let i = 0; i < SITES.length; i++) {
+        SITES[i].hide();
+    }
+    logbody.top = 0;
+    logbody.height = "100%-1";
+}
+
+function showlog() {
+    logbody.show();
+    for (let i = 0; i < SITES.length; i++) {
+        SITES[i].restore();
+    }
+}
+
+function hidelog() {
+    logbody.hide();
+    for (let i = 0; i < SITES.length; i++) {
+        SITES[i].full();
+    }
+}
+
 inputBar.on("submit", (text) => {
-    log(text);
-    if (text === "hide lists") {
-        for (let i = 0; i < SITES.length; i++) {
-            SITES[i].title.hide();
-            SITES[i].list.hide();
-        }
-        logbody.top = 0;
-        logbody.height = "100%-1";
-        screen.render();
-    } else if (text === "show lists") {
-        for (let i = 0; i < SITES.length; i++) {
-            SITES[i].title.show();
-            SITES[i].list.show();
-        }
-        logbody.top = "66%";
-        logbody.height = "34%";
-        screen.render();
+    if (text === "hide list") {
+        hidelist();
+    } else if (text === "show list") {
+        showlist();
     } else if (text === "hide log") {
-        logbody.hide();
-        for (let i = 0; i < SITES.length; i++) {
-            SITES[i].list.height = "100%-2";
-        }
-        screen.render();
+        hidelog();
     } else if (text === "show log") {
-        logbody.show();
-        for (let i = 0; i < SITES.length; i++) {
-            SITES[i].list.height = "66%-1";
-        }
-        screen.render();
+        showlog();
+    } else if (text === "help") {
+        logbody.pushLine("Commands:");
+        logbody.pushLine("show [log|list]");
+        logbody.pushLine("hide [log|list]");
+        logbody.setScrollPerc(100);
     }
     inputBar.clearValue();
+    screen.render();
 });
 
 function sleep(time) {
@@ -221,8 +236,18 @@ if (config.enableCB) {
     mainSiteLoop(cb);
 }
 
+if (!config.listshown) {
+    hidelist();
+}
+
+if (!config.logshown) {
+    hidelog();
+}
+
 screen.append(logbody);
 screen.append(inputBar);
+
+screen.render();
 
 mfc.msg(config.mfcmodels.length + " model(s) in config");
 cb.msg(config.cbmodels.length + " model(s) in config");
