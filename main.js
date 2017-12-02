@@ -134,9 +134,9 @@ screen.key("enter", () => {
     inputBar.focus();
 });
 
-// Close on escape, q, or ctrl+c
+// Close on q, or ctrl+c
 // Note: screen intercepts ctrl+c and it does not pass down to ffmpeg
-screen.key(["escape", "q", "C-c"], () => (
+screen.key(["q", "C-c"], () => (
     exit()
 ));
 
