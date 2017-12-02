@@ -8,8 +8,8 @@ const yaml    = require("js-yaml");
 const site    = require("./site");
 
 class Cb extends site.Site {
-    constructor(config, screen, logbody, body) {
-        super("CB ", config, "_cb", screen, logbody, body);
+    constructor(config, screen, logbody, num) {
+        super("CB ", config, "_cb", screen, logbody, num);
         this.onlineModels = new Map();
         this.timeOut = 20000;
         this.session = bhttp.session();
@@ -27,19 +27,19 @@ class Cb extends site.Site {
             $("ul.list li").each(function(i, li) {
                 const cs = $(li).find("div.thumbnail_label");
                 const modelname = $(li).find("div.title a").text().trim();
-                let currState = "away";
+                let currState = "Away";
 
                 if (cs.hasClass("thumbnail_label_c_hd") || cs.hasClass("thumbnail_label_c_new") ||
                     cs.hasClass("thumbnail_label_exhibitionist") || cs.hasClass("thumbnail_label_c")) {
-                    currState = "public";
+                    currState = "Public chat";
                 } else if (cs.hasClass("thumbnail_label_c_private_show")) {
-                    currState = "private";
+                    currState = "Private";
                 } else if (cs.hasClass("thumbnail_label_c_group_show")) {
-                    currState = "group";
+                    currState = "Group";
                 } else if (cs.hasClass("thumbnail_label_c_hidden_show")) {
-                    currState = "hidden";
+                    currState = "Hidden";
                 } else if (cs.hasClass("thumbnail_label_offline")) {
-                    currState = "away";
+                    currState = "Offline";
                 }
 
                 me.onlineModels.set(modelname, currState);
@@ -127,7 +127,7 @@ class Cb extends site.Site {
     }
 
     addModel(model) {
-        if (super.addModel(model.uid, model.nm, this.config.cbmodels)) {
+        if (super.addModel(model, this.config.cbmodels)) {
             this.config.cbmodels.push(model.uid);
             return true;
         }
@@ -164,30 +164,38 @@ class Cb extends site.Site {
 
         if (this.onlineModels.has(nm)) {
             const currState = this.onlineModels.get(nm);
+            let listitem = this.modelList.get(nm);
 
-            if (currState === "public") {
+            if (!this.modelList.has(nm)) {
+                this.errMsg("Did not find " + nm + " in modelList map");
+            }
+
+            listitem.modelState = currState;
+
+            if (currState === "Public chat") {
                 msg += " is in public chat!";
                 this.modelsToCap.push({uid: nm, nm: nm});
                 isBroadcasting = 1;
-            } else if (currState === "private") {
+            } else if (currState === "Private") {
                 msg += " is in a private show.";
-            } else if (currState === "group") {
+            } else if (currState === "Group") {
                 msg += " is in a group show.";
-            } else if (currState === "away") {
+            } else if (currState === "Away") {
                 msg += colors.model("'s") + " cam is off.";
-            } else if (currState === "hidden") {
+            } else if (currState === "Hidden") {
                 msg += " model is online but hidden.";
             } else {
                 msg += " has unknown state " + currState;
             }
+            this.modelList.set(nm, listitem);
             if (!this.modelState.has(nm) || (this.modelState.has(nm) && currState !== this.modelState.get(nm))) {
                 this.msg(msg);
             }
             this.modelState.set(nm, currState);
-        } else if (this.modelState.has(nm) && this.modelState.get(nm) !== "offline") {
+        } else if (this.modelState.has(nm) && this.modelState.get(nm) !== "Offline") {
             msg += " has logged off.";
         } else {
-            this.modelState.set(nm, "offline");
+            this.modelState.set(nm, "Offline");
         }
 
         if (this.currentlyCapping.has(nm) && isBroadcasting === 0) {
@@ -205,14 +213,21 @@ class Cb extends site.Site {
 
         this.modelsToCap = [];
 
+        // TODO: This should be somewhere else
+        for (let i = 0; i < this.config.cbmodels.length; i++) {
+            if (!this.modelList.has(this.config.cbmodels[i])) {
+                this.modelList.set(this.config.cbmodels[i], {uid: this.config.cbmodels[i], nm: this.config.cbmodels[i], modelState: "Offline", filename: ""});
+            }
+        }
+
         return Promise.try(function() {
             return me.findOnlineModels();
         }).then(function() {
             const queries = [];
 
-            for (let i = 0; i < me.config.cbmodels.length; i++) {
-                queries.push(me.checkModelState(me.config.cbmodels[i]));
-            }
+            me.modelList.forEach(function(value) {
+                queries.push(me.checkModelState(value.nm));
+            });
 
             return Promise.all(queries).then(function() {
                 return me.modelsToCap;

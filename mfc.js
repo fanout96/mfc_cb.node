@@ -7,8 +7,8 @@ const yaml    = require("js-yaml");
 const colors  = require("colors/safe");
 
 class Mfc extends site.Site {
-    constructor(config, screen, logbody, body) {
-        super("MFC", config, "_mfc", screen, logbody, body);
+    constructor(config, screen, logbody, num) {
+        super("MFC", config, "_mfc", screen, logbody, num);
         mfc.setLogLevel(0);
         this.mfcGuest = new mfc.Client("guest", "guest", {useWebSockets: false, camYou: false});
     }
@@ -67,7 +67,7 @@ class Mfc extends site.Site {
     }
 
     addModel(model) {
-        if (super.addModel(model.uid, model.nm, this.config.mfcmodels)) {
+        if (super.addModel(model, this.config.mfcmodels)) {
             this.config.mfcmodels.push(model.uid);
             return true;
         }
@@ -130,27 +130,42 @@ class Mfc extends site.Site {
                 let isBroadcasting = 0;
                 let msg = colors.model(model.nm);
 
+                if (!me.modelList.has(uid)) {
+                    this.errMsg("Did not find " + model.nm + " in modelList map");
+                }
+
+                let listitem = me.modelList.get(uid);
+                listitem.nm = model.nm;
+
                 if (model.vs === mfc.STATE.FreeChat) {
+                    listitem.modelState = "Public chat";
                     msg += " is in public chat!";
                     me.modelsToCap.push(model);
                     isBroadcasting = 1;
                 } else if (model.vs === mfc.STATE.GroupShow) {
+                    listitem.modelState = "Group Show";
                     msg += " is in a group show";
                 } else if (model.vs === mfc.STATE.Private) {
                     if (model.truepvt === 1) {
+                        listitem.modelState = "True Private";
                         msg += " is in a true private show.";
                     } else {
+                        listitem.modelState = "Private";
                         msg += " is in a private show.";
                     }
                 } else if (model.vs === mfc.STATE.Away) {
+                    listitem.modelState = "Away";
                     msg += " is away.";
                 } else if (model.vs === mfc.STATE.Online) {
+                    listitem.modelState = "Away";
                     msg += colors.model("'s") + " cam is off.";
                 } else if (model.vs === mfc.STATE.Offline) {
+                    listitem.modelState = "Offline";
                     msg += " has logged off.";
                 }
+                me.modelList.set(uid, listitem);
                 if ((me.modelState.has(uid) || model.vs !== mfc.STATE.Offline) && model.vs !== me.modelState.get(uid)) {
-                    me.msg(msg);
+            me.msg(msg);
                 }
                 me.modelState.set(uid, model.vs);
                 if (me.currentlyCapping.has(model.uid) && isBroadcasting === 0) {
@@ -173,9 +188,16 @@ class Mfc extends site.Site {
 
         me.modelsToCap = [];
 
-        for (let i = 0; i < me.config.mfcmodels.length; i++) {
-            queries.push(me.checkModelState(me.config.mfcmodels[i]));
+        // TODO: This should be somewhere else
+        for (let i = 0; i < this.config.mfcmodels.length; i++) {
+            if (!this.modelList.has(this.config.mfcmodels[i])) {
+                this.modelList.set(this.config.mfcmodels[i], {uid: this.config.mfcmodels[i], nm: "", modelState: "Offline", filename: ""});
+            }
         }
+
+        this.modelList.forEach(function(value) {
+            queries.push(me.checkModelState(value.uid));
+        });
 
         return Promise.all(queries).then(function() {
             return me.modelsToCap;

@@ -10,6 +10,9 @@ notifications: true
 dateFormat: YYYYMMDD_HHmmss
 debug: false
 modelcolor: magenta
+statecolor: yellow
+offlinecolor: blue
+filecolor: green
 timecolor: grey
 sitecolor: green
 debugcolor: yellow

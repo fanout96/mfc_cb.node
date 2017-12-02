@@ -162,11 +162,14 @@ mkdirp(config.completeDirectory, function(err) {
 });
 
 colors.setTheme({
-    model: config.modelcolor,
-    time:  config.timecolor,
-    site:  config.sitecolor,
-    debug: config.debugcolor,
-    error: config.errorcolor
+    model:   config.modelcolor,
+    state:   config.statecolor,
+    offline: config.offlinecolor,
+    file:    config.filecolor,
+    time:    config.timecolor,
+    site:    config.sitecolor,
+    debug:   config.debugcolor,
+    error:   config.errorcolor
 });
 
 mfc = new MFC.Mfc(config, screen, logbody, 1);

@@ -20,6 +20,8 @@ class Site {
         this.screen = screen;
         this.logbody = logbody;
 
+        this.modelList = new Map();
+
         this.title = blessed.box({
             top: 0,
             left: num === 2 ? "50%" : 0,
@@ -108,20 +110,26 @@ class Site {
         ];
     }
 
-    addModel(uid, nm, models) {
-        const index = models.indexOf(uid);
+    addModel(model, models) {
+        const index = models.indexOf(model.uid);
         let rc = false;
         if (index === -1) {
-            this.msg(colors.model(nm) + colors.italic(" added") + " to capture list");
+            this.msg(colors.model(model.nm) + colors.italic(" added") + " to capture list");
             rc = true;
         } else {
-            this.msg(colors.model(nm) + " is already in the capture list");
+            this.msg(colors.model(model.nm) + " is already in the capture list");
+        }
+        if (!this.modelList.has(model.uid)) {
+            this.modelList.set(model.uid, {uid: model.uid, nm: model.nm, modelState: "offline", filename: ""});
         }
         return rc;
     }
 
     removeModel(model) {
         this.msg(colors.model(model.nm) + colors.italic(" removed") + " from capture list.");
+        if (this.modelList.has(model.uid)) {
+            this.modelList.remove(model.uid);
+        }
         this.haltCapture(model);
         return true;
     }
@@ -179,6 +187,10 @@ class Site {
     startCapture(spawnArgs, filename, model, tryingToExit) {
         const me = this;
         const captureProcess = childProcess.spawn("ffmpeg", spawnArgs);
+
+        var listitem = this.modelList.get(model.uid);
+        listitem.filename = filename + ".ts";
+        this.modelList.set(model.uid, listitem);
 
         captureProcess.on("close", function() {
             if (tryingToExit) {
@@ -303,8 +315,17 @@ class Site {
             me.list.deleteLine(0);
         }
 
-        this.currentlyCapping.forEach(function(value) {
-            me.list.pushLine(colors.model(value.nm));
+        this.modelList.forEach(function(value) {
+            let line = colors.model(value.nm);
+            for (let i = 0; i < 16-value.nm.length; i++) {
+                line += " ";
+            }
+            line += value.modelState ===  "Offline" ? colors.offline(value.modelState) : colors.state(value.modelState);
+            for (let i = 0; i < 16-value.modelState.length; i++) {
+                line += " ";
+            }
+            line += colors.file(value.filename);
+            me.list.pushLine(line);
         });
 
         this.screen.render();
