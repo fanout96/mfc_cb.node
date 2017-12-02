@@ -119,8 +119,8 @@ class Site {
         } else {
             this.msg(colors.model(model.nm) + " is already in the capture list");
         }
-        if (!this.modelList.has(model.uid)) {
-            this.modelList.set(model.uid, {uid: model.uid, nm: model.nm, modelState: "offline", filename: ""});
+        if (!this.modelList.has(model.nm)) {
+            this.modelList.set(model.nm, {uid: model.uid, nm: model.nm, modelState: "offline", filename: ""});
         }
         this.render();
         return rc;
@@ -128,8 +128,8 @@ class Site {
 
     removeModel(model) {
         this.msg(colors.model(model.nm) + colors.italic(" removed") + " from capture list.");
-        if (this.modelList.has(model.uid)) {
-            this.modelList.remove(model.uid);
+        if (this.modelList.has(model.nm)) {
+            this.modelList.remove(model.nm);
         }
         this.render();
         this.haltCapture(model);
@@ -188,18 +188,18 @@ class Site {
         const me = this;
         const captureProcess = childProcess.spawn("ffmpeg", spawnArgs);
 
-        var listitem = this.modelList.get(model.uid);
+        const listitem = this.modelList.get(model.nm);
         listitem.filename = filename + ".ts";
-        this.modelList.set(model.uid, listitem);
+        this.modelList.set(model.nm, listitem);
 
         captureProcess.on("close", function() {
             if (tryingToExit) {
                 me.msg(colors.model(model.nm) + " capture interrupted");
             }
 
-            var listitem = me.modelList.get(model.uid);
+            const listitem = me.modelList.get(model.nm);
             listitem.filename = "";
-            me.modelList.set(model.uid, listitem);
+            me.modelList.set(model.nm, listitem);
 
             me.removeModelFromCapList(model);
 
@@ -282,12 +282,18 @@ class Site {
         this.msg(colors.model(model.nm) + " converting to " + filename + "." + this.config.autoConvertType);
 
         const myCompleteProcess = childProcess.spawn("ffmpeg", mySpawnArguments);
+        const listitem = this.modelList.get(model.nm);
+        listitem.filename = filename + "." + this.config.autoConvertType;
+        this.modelList.set(model.nm, listitem);
 
         myCompleteProcess.on("close", function() {
             if (!me.config.keepTsFile) {
                 fs.unlinkSync(me.config.captureDirectory + "/" + filename + ".ts");
             }
             me.msg(colors.model(model.nm) + " done converting " + filename + "." + me.config.autoConvertType);
+            const listitem = me.modelList.get(model.nm);
+            listitem.filename = "";
+            me.modelList.set(model.nm, listitem);
             me.semaphore--; // release semaphore only when ffmpeg process has ended
         });
 
@@ -320,7 +326,9 @@ class Site {
             me.list.deleteLine(0);
         }
 
-        this.modelList.forEach(function(value) {
+        const sorted_keys = Array.from(this.modelList.keys()).sort();
+        for (let i = 0; i < sorted_keys.length; i++) {
+            const value = this.modelList.get(sorted_keys[i]);
             let line = colors.model(value.nm);
             for (let i = 0; i < 16-value.nm.length; i++) {
                 line += " ";
@@ -330,9 +338,8 @@ class Site {
                 line += " ";
             }
             line += colors.file(value.filename);
-            me.list.pushLine(line);
-        });
-
+            this.list.pushLine(line);
+        }
         this.screen.render();
     }
 }

@@ -130,12 +130,12 @@ class Mfc extends site.Site {
                 let isBroadcasting = 0;
                 let msg = colors.model(model.nm);
 
-                if (!me.modelList.has(uid)) {
-                    this.errMsg("Did not find " + model.nm + " in modelList map");
+                if (!me.modelList.has(model.nm)) {
+                    me.modelList.set(model.nm, {uid: uid, nm: model.nm, modelState: "Offline", filename: ""});
                 }
+                me.render();
 
-                let listitem = me.modelList.get(uid);
-                listitem.nm = model.nm;
+                let listitem = me.modelList.get(model.nm);
 
                 if (model.vs === mfc.STATE.FreeChat) {
                     listitem.modelState = "Public chat";
@@ -163,7 +163,7 @@ class Mfc extends site.Site {
                     listitem.modelState = "Offline";
                     msg += " has logged off.";
                 }
-                me.modelList.set(uid, listitem);
+                me.modelList.set(model.nm, listitem);
                 if ((me.modelState.has(uid) || model.vs !== mfc.STATE.Offline) && model.vs !== me.modelState.get(uid)) {
             me.msg(msg);
                 }
@@ -188,17 +188,9 @@ class Mfc extends site.Site {
 
         me.modelsToCap = [];
 
-        // TODO: This should be somewhere else
         for (let i = 0; i < this.config.mfcmodels.length; i++) {
-            if (!this.modelList.has(this.config.mfcmodels[i])) {
-                this.modelList.set(this.config.mfcmodels[i], {uid: this.config.mfcmodels[i], nm: "", modelState: "Offline", filename: ""});
-            }
+            queries.push(this.checkModelState(this.config.mfcmodels[i]));
         }
-        this.render();
-
-        this.modelList.forEach(function(value) {
-            queries.push(me.checkModelState(value.uid));
-        });
 
         return Promise.all(queries).then(function() {
             return me.modelsToCap;
