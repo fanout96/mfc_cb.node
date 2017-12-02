@@ -135,10 +135,10 @@ class Mfc extends site.Site {
                 }
                 me.render();
 
-                let listitem = me.modelList.get(model.nm);
+                const listitem = me.modelList.get(model.nm);
 
                 if (model.vs === mfc.STATE.FreeChat) {
-                    listitem.modelState = "Public chat";
+                    listitem.modelState = "Public Chat";
                     msg += " is in public chat!";
                     me.modelsToCap.push(model);
                     isBroadcasting = 1;
@@ -165,7 +165,7 @@ class Mfc extends site.Site {
                 }
                 me.modelList.set(model.nm, listitem);
                 if ((me.modelState.has(uid) || model.vs !== mfc.STATE.Offline) && model.vs !== me.modelState.get(uid)) {
-            me.msg(msg);
+                    me.msg(msg);
                 }
                 me.modelState.set(uid, model.vs);
                 if (me.currentlyCapping.has(model.uid) && isBroadcasting === 0) {

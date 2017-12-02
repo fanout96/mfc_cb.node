@@ -31,7 +31,7 @@ class Cb extends site.Site {
 
                 if (cs.hasClass("thumbnail_label_c_hd") || cs.hasClass("thumbnail_label_c_new") ||
                     cs.hasClass("thumbnail_label_exhibitionist") || cs.hasClass("thumbnail_label_c")) {
-                    currState = "Public chat";
+                    currState = "Public Chat";
                 } else if (cs.hasClass("thumbnail_label_c_private_show")) {
                     currState = "Private";
                 } else if (cs.hasClass("thumbnail_label_c_group_show")) {
@@ -164,7 +164,7 @@ class Cb extends site.Site {
 
         if (this.onlineModels.has(nm)) {
             const currState = this.onlineModels.get(nm);
-            let listitem = this.modelList.get(nm);
+            const listitem = this.modelList.get(nm);
 
             if (!this.modelList.has(nm)) {
                 this.errMsg("Did not find " + nm + " in modelList map");
@@ -172,7 +172,7 @@ class Cb extends site.Site {
 
             listitem.modelState = currState;
 
-            if (currState === "Public chat") {
+            if (currState === "Public Chat") {
                 msg += " is in public chat!";
                 this.modelsToCap.push({uid: nm, nm: nm});
                 isBroadcasting = 1;

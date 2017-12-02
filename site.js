@@ -197,9 +197,9 @@ class Site {
                 me.msg(colors.model(model.nm) + " capture interrupted");
             }
 
-            const listitem = me.modelList.get(model.nm);
-            listitem.filename = "";
-            me.modelList.set(model.nm, listitem);
+            const li = me.modelList.get(model.nm);
+            li.filename = "";
+            me.modelList.set(model.nm, li);
 
             me.removeModelFromCapList(model);
 
@@ -291,9 +291,9 @@ class Site {
                 fs.unlinkSync(me.config.captureDirectory + "/" + filename + ".ts");
             }
             me.msg(colors.model(model.nm) + " done converting " + filename + "." + me.config.autoConvertType);
-            const listitem = me.modelList.get(model.nm);
-            listitem.filename = "";
-            me.modelList.set(model.nm, listitem);
+            const li = me.modelList.get(model.nm);
+            li.filename = "";
+            me.modelList.set(model.nm, li);
             me.semaphore--; // release semaphore only when ffmpeg process has ended
         });
 
@@ -326,15 +326,15 @@ class Site {
             me.list.deleteLine(0);
         }
 
-        const sorted_keys = Array.from(this.modelList.keys()).sort();
-        for (let i = 0; i < sorted_keys.length; i++) {
-            const value = this.modelList.get(sorted_keys[i]);
+        const sortedKeys = Array.from(this.modelList.keys()).sort();
+        for (let i = 0; i < sortedKeys.length; i++) {
+            const value = this.modelList.get(sortedKeys[i]);
             let line = colors.model(value.nm);
-            for (let i = 0; i < 16-value.nm.length; i++) {
+            for (let j = 0; j < 16 - value.nm.length; j++) {
                 line += " ";
             }
             line += value.modelState ===  "Offline" ? colors.offline(value.modelState) : colors.state(value.modelState);
-            for (let i = 0; i < 16-value.modelState.length; i++) {
+            for (let j = 0; j < 16 - value.modelState.length; j++) {
                 line += " ";
             }
             line += colors.file(value.filename);
