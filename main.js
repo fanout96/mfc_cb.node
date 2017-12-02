@@ -59,6 +59,35 @@ function log(text) {
 
 inputBar.on("submit", (text) => {
     log(text);
+    if (text === "hide lists") {
+        for (let i = 0; i < SITES.length; i++) {
+            SITES[i].title.hide();
+            SITES[i].list.hide();
+        }
+        logbody.top = 0;
+        logbody.height = "100%-1";
+        screen.render();
+    } else if (text === "show lists") {
+        for (let i = 0; i < SITES.length; i++) {
+            SITES[i].title.show();
+            SITES[i].list.show();
+        }
+        logbody.top = "66%";
+        logbody.height = "34%";
+        screen.render();
+    } else if (text === "hide log") {
+        logbody.hide();
+        for (let i = 0; i < SITES.length; i++) {
+            SITES[i].list.height = "100%-2";
+        }
+        screen.render();
+    } else if (text === "show log") {
+        logbody.show();
+        for (let i = 0; i < SITES.length; i++) {
+            SITES[i].list.height = "66%-1";
+        }
+        screen.render();
+    }
     inputBar.clearValue();
 });
 
