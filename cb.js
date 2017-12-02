@@ -219,6 +219,7 @@ class Cb extends site.Site {
                 this.modelList.set(this.config.cbmodels[i], {uid: this.config.cbmodels[i], nm: this.config.cbmodels[i], modelState: "Offline", filename: ""});
             }
         }
+        this.render();
 
         return Promise.try(function() {
             return me.findOnlineModels();

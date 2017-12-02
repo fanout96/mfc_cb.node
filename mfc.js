@@ -194,6 +194,7 @@ class Mfc extends site.Site {
                 this.modelList.set(this.config.mfcmodels[i], {uid: this.config.mfcmodels[i], nm: "", modelState: "Offline", filename: ""});
             }
         }
+        this.render();
 
         this.modelList.forEach(function(value) {
             queries.push(me.checkModelState(value.uid));

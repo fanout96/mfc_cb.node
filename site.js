@@ -122,6 +122,7 @@ class Site {
         if (!this.modelList.has(model.uid)) {
             this.modelList.set(model.uid, {uid: model.uid, nm: model.nm, modelState: "offline", filename: ""});
         }
+        this.render();
         return rc;
     }
 
@@ -130,18 +131,17 @@ class Site {
         if (this.modelList.has(model.uid)) {
             this.modelList.remove(model.uid);
         }
+        this.render();
         this.haltCapture(model);
         return true;
     }
 
     addModelToCapList(model, filename, captureProcess) {
         this.currentlyCapping.set(model.uid, {nm: model.nm, filename: filename, captureProcess: captureProcess});
-        this.render();
     }
 
     removeModelFromCapList(model) {
         this.currentlyCapping.delete(model.uid);
-        this.render();
     }
 
     getNumCapsInProgress() {
@@ -197,6 +197,10 @@ class Site {
                 me.msg(colors.model(model.nm) + " capture interrupted");
             }
 
+            var listitem = me.modelList.get(model.uid);
+            listitem.filename = "";
+            me.modelList.set(model.uid, listitem);
+
             me.removeModelFromCapList(model);
 
             fs.stat(me.config.captureDirectory + "/" + filename + ".ts", function(err, stats) {
@@ -217,6 +221,7 @@ class Site {
 
         if (captureProcess.pid) {
             this.msg(colors.model(model.nm) + " recording started (" + filename + ".ts)");
+            this.render();
             this.addModelToCapList(model, filename, captureProcess);
         }
     }
