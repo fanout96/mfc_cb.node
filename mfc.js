@@ -126,7 +126,7 @@ class Mfc extends site.Site {
         return Promise.try(function() {
             return me.mfcGuest.queryUser(uid);
         }).then(function(model) {
-            if (model !== undefined) {
+            if (typeof model !== "undefined") {
                 let isBroadcasting = 0;
                 let msg = colors.model(model.nm);
 

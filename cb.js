@@ -87,46 +87,53 @@ class Cb extends site.Site {
 
         return Promise.try(function() {
             return fetch(url);
-        }).then(res => res.json()).then(function(out) {
-            const currState = out.room_status;
+        }).then(function(res) {
+            return res.json();
+        }).then(function(json) {
             const listitem = me.modelList.get(nm);
+            let currState;
 
-            me.cbData.set(nm, out);
-
-            if (currState === "public") {
-                msg += " is in public chat!";
-                me.modelsToCap.push({uid: nm, nm: nm});
-                isBroadcasting = 1;
-                listitem.modelState = "Public Chat";
-            } else if (currState === "private") {
-                msg += " is in a private show.";
-                listitem.modelState = "Private";
-            } else if (currState === "group") {
-                msg += " is in a group show.";
-                listitem.modelState = "Group Show";
-            } else if (currState === "away") {
-                msg += colors.model("'s") + " cam is off.";
-                listitem.modelState = "Away";
-            } else if (currState === "hidden") {
-                msg += " model is online but hidden.";
-                listitem.modelState = "Hidden";
-            } else if (currState === "offline") {
-                msg += " model has gone offline.";
-                listitem.modelState = "Offline";
+            if (typeof json.status !== "undefined") {
+                currState = "Access Denied";
+                msg.dbgMsg(colors.model(nm) + ", " + json.detail);
             } else {
-                msg += " has unknown state " + currState;
-                listitem.modelstate = currState;
-            }
-            me.modelList.set(nm, listitem);
-            if ((!me.modelState.has(nm) && currState !== "offline") || (me.modelState.has(nm) && currState !== me.modelState.get(nm))) {
-                me.msg(msg);
-            }
-            me.modelState.set(nm, currState);
-            me.render();
+                currState = json.room_status;
+                me.cbData.set(nm, json);
+                if (currState === "public") {
+                    msg += " is in public chat!";
+                    me.modelsToCap.push({uid: nm, nm: nm});
+                    isBroadcasting = 1;
+                    listitem.modelState = "Public Chat";
+                } else if (currState === "private") {
+                    msg += " is in a private show.";
+                    listitem.modelState = "Private";
+                } else if (currState === "group") {
+                    msg += " is in a group show.";
+                    listitem.modelState = "Group Show";
+                } else if (currState === "away") {
+                    msg += colors.model("'s") + " cam is off.";
+                    listitem.modelState = "Away";
+                } else if (currState === "hidden") {
+                    msg += " model is online but hidden.";
+                    listitem.modelState = "Hidden";
+                } else if (currState === "offline") {
+                    msg += " model has gone offline.";
+                    listitem.modelState = "Offline";
+                } else {
+                    msg += " has unknown state " + currState;
+                    listitem.modelstate = currState;
+                }
+                me.modelList.set(nm, listitem);
+                if ((!me.modelState.has(nm) && currState !== "offline") || (me.modelState.has(nm) && currState !== me.modelState.get(nm))) {
+                    me.msg(msg);
+                }
+                me.modelState.set(nm, currState);
+                me.render();
 
-            if (me.currentlyCapping.has(nm) && isBroadcasting === 0) {
-                me.dbgMsg(colors.model(nm) + " is no longer broadcasting, ending ffmpeg process.");
-                me.haltCapture(nm);
+                if (me.currentlyCapping.has(nm) && isBroadcasting === 0) {
+                    me.dbgMsg(colors.model(nm) + " is no longer broadcasting, ending ffmpeg process.");
+                    me.haltCapture(nm);
+                }
             }
             return true;
         }).catch(function(err) {
