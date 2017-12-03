@@ -9,6 +9,8 @@ maxByteSize: 0
 notifications: true
 dateFormat: YYYYMMDD_HHmmss
 debug: false
+logshown: true
+listshown: true
 modelcolor: magenta
 statecolor: yellow
 offlinecolor: blue
