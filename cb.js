@@ -1,7 +1,5 @@
 const Promise = require("bluebird");
 const colors  = require("colors/safe");
-const bhttp   = require("bhttp");
-const cheerio = require("cheerio");
 const fetch   = require("node-fetch");
 const _       = require("underscore");
 const fs      = require("fs");
@@ -11,48 +9,8 @@ const site    = require("./site");
 class Cb extends site.Site {
     constructor(config, screen, logbody, num) {
         super("CB ", config, "_cb", screen, logbody, num);
-        //this.onlineModels = new Map();
+        this.cbData = new Map();
         this.timeOut = 20000;
-        this.session = bhttp.session();
-    }
-
-    getStream(nm) {
-        const me = this;
-
-        return Promise.try(function() {
-            return me.session.get("https://chaturbate.com/" + nm + "/");
-        }).then(function(response) {
-            let url = "";
-            const page = cheerio.load(response.body);
-            const scripts = page("script").map(function() {
-                return page(this).text();
-            }).get().join("");
-
-            let streamData = scripts.match(/(https:\/\/\w+\.stream\.highwebmedia\.com\/live-edge\/[\w-]+\/playlist\.m3u8)/i);
-
-            if (streamData !== null) {
-                url = streamData[1];
-            } else {
-                streamData = scripts.match(/(https:\/\/\w+\.stream\.highwebmedia\.com\/live-edge\/amlst:[\w-]+\/playlist\.m3u8)/i);
-                if (streamData !== null) {
-                    url = streamData[1];
-                } else {
-                    // CB's JSON for online models does not update quickly when a model
-                    // logs off, and the JSON can take up to 30 minutes to update.
-                    // When a model is offline, the models page redirect to a login
-                    // page and there won't be a match for the m3u8 regex.
-                    // Temporarily commenting out the error, until a better solution
-                    // is coded.
-                    // me.errMsg(me, nm + ", failed to find m3u8 stream");
-                }
-            }
-
-            // me.dbgMsg(me, "url = " + url);
-            return url;
-        }).catch(function(err) {
-            me.errMsg(colors.model(nm) + ": " + err.toString());
-            return err;
-        });
     }
 
     processUpdates() {
@@ -133,6 +91,8 @@ class Cb extends site.Site {
             const currState = out.room_status;
             const listitem = me.modelList.get(nm);
 
+            me.cbData.set(nm, out);
+
             if (currState === "public") {
                 msg += " is in public chat!";
                 me.modelsToCap.push({uid: nm, nm: nm});
@@ -211,9 +171,9 @@ class Cb extends site.Site {
         }
 
         return Promise.try(function() {
-            return me.getStream(model.nm);
-        }).then(function(url) {
             const filename = me.getFileName(model.nm);
+            const data = me.cbData.get(model.nm);
+            const url = data.hls_source;
             let spawnArgs = me.getCaptureArguments(url, filename);
 
             if (url === "") {
@@ -221,9 +181,6 @@ class Cb extends site.Site {
                 spawnArgs = "";
             }
             return {spawnArgs: spawnArgs, filename: filename, model: model};
-        }).catch(function(err) {
-            me.errMsg(colors.model(model.nm) + " " + err.toString());
-            return err;
         });
     }
 

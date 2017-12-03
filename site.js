@@ -305,6 +305,7 @@ class Site {
         const listitem = this.modelList.get(model.nm);
         listitem.filename = filename + "." + this.config.autoConvertType;
         this.modelList.set(model.nm, listitem);
+        this.render();
 
         myCompleteProcess.on("close", function() {
             if (!me.config.keepTsFile) {
@@ -314,6 +315,7 @@ class Site {
             const li = me.modelList.get(model.nm);
             li.filename = "";
             me.modelList.set(model.nm, li);
+            me.render();
             me.semaphore--; // release semaphore only when ffmpeg process has ended
         });
 
