@@ -133,7 +133,6 @@ class Mfc extends site.Site {
                 if (!me.modelList.has(model.nm)) {
                     me.modelList.set(model.nm, {uid: uid, nm: model.nm, modelState: "Offline", filename: ""});
                 }
-                me.render();
 
                 const listitem = me.modelList.get(model.nm);
 
@@ -164,6 +163,7 @@ class Mfc extends site.Site {
                     msg += " has logged off.";
                 }
                 me.modelList.set(model.nm, listitem);
+                me.render();
                 if ((me.modelState.has(uid) || model.vs !== mfc.STATE.Offline) && model.vs !== me.modelState.get(uid)) {
                     me.msg(msg);
                 }
