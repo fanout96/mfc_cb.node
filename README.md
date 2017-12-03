@@ -52,3 +52,8 @@ Refer to `config.yml`.
 * To run: `node main.js`
 * To run without color: `node main.js --no-color`
 
+Console Commands
+===========
+* hide [log|list]
+* show [log|list]
+* help

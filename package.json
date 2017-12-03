@@ -17,18 +17,18 @@
 	},
 	"homepage": "https://github.com/jrudess/mfc_cb.node",
 	"dependencies": {
-		"blessed": "^0.1.81",
-		"bluebird": "^3.5.1",
 		"bhttp": "^1.2.4",
+		"blessed": "chjj/blessed",
+		"bluebird": "^3.5.1",
 		"cheerio": "^0.22.0",
+		"colors": "latest",
 		"js-yaml": "^3.10.0",
 		"mkdirp": "^0.5.1",
 		"moment": "^2.19.2",
 		"mv": "^2.1.1",
-		"string": "^3.3.3",
-		"node-notifier": "^5.1.2",
 		"MFCAuto": "ZombieAlex/MFCAuto#v4.2.2",
-		"underscore": "latest",
-		"colors": "latest"
+		"node-fetch": "^1.7.3",
+		"string": "^3.3.3",
+		"underscore": "latest"
 	}
 }

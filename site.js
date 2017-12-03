@@ -140,7 +140,7 @@ class Site {
             this.msg(colors.model(model.nm) + " is already in the capture list");
         }
         if (!this.modelList.has(model.nm)) {
-            this.modelList.set(model.nm, {uid: model.uid, nm: model.nm, modelState: "offline", filename: ""});
+            this.modelList.set(model.nm, {uid: model.uid, nm: model.nm, modelState: "Offline", filename: ""});
         }
         this.render();
         return rc;
@@ -149,7 +149,7 @@ class Site {
     removeModel(model) {
         this.msg(colors.model(model.nm) + colors.italic(" removed") + " from capture list.");
         if (this.modelList.has(model.nm)) {
-            this.modelList.remove(model.nm);
+            this.modelList.delete(model.nm);
         }
         this.render();
         this.haltCapture(model);

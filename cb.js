@@ -2,6 +2,7 @@ const Promise = require("bluebird");
 const colors  = require("colors/safe");
 const bhttp   = require("bhttp");
 const cheerio = require("cheerio");
+const fetch   = require("node-fetch");
 const _       = require("underscore");
 const fs      = require("fs");
 const yaml    = require("js-yaml");
@@ -10,47 +11,9 @@ const site    = require("./site");
 class Cb extends site.Site {
     constructor(config, screen, logbody, num) {
         super("CB ", config, "_cb", screen, logbody, num);
-        this.onlineModels = new Map();
+        //this.onlineModels = new Map();
         this.timeOut = 20000;
         this.session = bhttp.session();
-    }
-
-    findOnlineModels() {
-        const me = this;
-
-        return Promise.try(function() {
-            return bhttp.get("https://chaturbate.com/tours/3/?c=10000", {responseTimeout: me.timeOut});
-        }).then(function(response) {
-
-            const $ = cheerio.load(response.body);
-
-            $("ul.list li").each(function(i, li) {
-                const cs = $(li).find("div.thumbnail_label");
-                const modelname = $(li).find("div.title a").text().trim();
-                let currState = "Away";
-
-                if (cs.hasClass("thumbnail_label_c_hd") || cs.hasClass("thumbnail_label_c_new") ||
-                    cs.hasClass("thumbnail_label_exhibitionist") || cs.hasClass("thumbnail_label_c")) {
-                    currState = "Public Chat";
-                } else if (cs.hasClass("thumbnail_label_c_private_show")) {
-                    currState = "Private";
-                } else if (cs.hasClass("thumbnail_label_c_group_show")) {
-                    currState = "Group";
-                } else if (cs.hasClass("thumbnail_label_c_hidden_show")) {
-                    currState = "Hidden";
-                } else if (cs.hasClass("thumbnail_label_offline")) {
-                    currState = "Offline";
-                }
-
-                me.onlineModels.set(modelname, currState);
-            });
-        }).catch(function(err) {
-            if (err !== null && err.code === 607) {
-                me.errMsg("CB did not respond after " + (me.timeOut / 1000) + " seconds.");
-            } else {
-                me.errMsg(err.toString());
-            }
-        });
     }
 
     getStream(nm) {
@@ -161,50 +124,56 @@ class Cb extends site.Site {
     checkModelState(nm) {
         let msg = colors.model(nm);
         let isBroadcasting = 0;
-
-        if (this.onlineModels.has(nm)) {
-            const currState = this.onlineModels.get(nm);
-            const listitem = this.modelList.get(nm);
-
-            if (!this.modelList.has(nm)) {
-                this.errMsg("Did not find " + nm + " in modelList map");
-            }
-
-            listitem.modelState = currState;
-
-            if (currState === "Public Chat") {
-                msg += " is in public chat!";
-                this.modelsToCap.push({uid: nm, nm: nm});
-                isBroadcasting = 1;
-            } else if (currState === "Private") {
-                msg += " is in a private show.";
-            } else if (currState === "Group") {
-                msg += " is in a group show.";
-            } else if (currState === "Away") {
-                msg += colors.model("'s") + " cam is off.";
-            } else if (currState === "Hidden") {
-                msg += " model is online but hidden.";
-            } else {
-                msg += " has unknown state " + currState;
-            }
-            this.modelList.set(nm, listitem);
-            if (!this.modelState.has(nm) || (this.modelState.has(nm) && currState !== this.modelState.get(nm))) {
-                this.msg(msg);
-            }
-            this.modelState.set(nm, currState);
-        } else if (this.modelState.has(nm) && this.modelState.get(nm) !== "Offline") {
-            msg += " has logged off.";
-        } else {
-            this.modelState.set(nm, "Offline");
-        }
-
-        if (this.currentlyCapping.has(nm) && isBroadcasting === 0) {
-            this.dbgMsg(colors.model(nm) + " is no longer broadcasting, ending ffmpeg process.");
-            this.haltCapture(nm);
-        }
+        let url = "https://chaturbate.com/api/chatvideocontext/" + nm;
+        let me = this;
 
         return Promise.try(function() {
+            return fetch(url);
+        }).then(res => res.json()).then(function(out) {
+            const currState = out.room_status;
+            const listitem = me.modelList.get(nm);
+
+            if (currState === "public") {
+                msg += " is in public chat!";
+                me.modelsToCap.push({uid: nm, nm: nm});
+                isBroadcasting = 1;
+                listitem.modelState = "Public Chat";
+            } else if (currState === "private") {
+                msg += " is in a private show.";
+                listitem.modelState = "Private";
+            } else if (currState === "group") {
+                msg += " is in a group show.";
+                listitem.modelState = "Group Show";
+            } else if (currState === "away") {
+                msg += colors.model("'s") + " cam is off.";
+                listitem.modelState = "Away";
+            } else if (currState === "hidden") {
+                msg += " model is online but hidden.";
+                listitem.modelState = "Hidden";
+            } else if (currState === "offline") {
+                msg += " model has gone offline.";
+                listitem.modelState = "Offline";
+            } else {
+                msg += " has unknown state " + currState;
+                listitem.modelstate = currState;
+            }
+            me.modelList.set(nm, listitem);
+            if ((!me.modelState.has(nm) && currState !== "offline") || (me.modelState.has(nm) && currState !== me.modelState.get(nm))) {
+                me.msg(msg);
+            }
+            me.modelState.set(nm, currState);
+            me.render();
+
+            if (me.currentlyCapping.has(nm) && isBroadcasting === 0) {
+                me.dbgMsg(colors.model(nm) + " is no longer broadcasting, ending ffmpeg process.");
+                me.haltCapture(nm);
+            }
             return true;
+        }).catch(function(err) {
+            me.errMsg("Unknown model " + colors.model(nm) + ", check the spelling.");
+            me.modelList.delete(nm);
+            me.render();
+            return err;
         });
     }
 
@@ -221,18 +190,14 @@ class Cb extends site.Site {
         }
         this.render();
 
-        return Promise.try(function() {
-            return me.findOnlineModels();
-        }).then(function() {
-            const queries = [];
+        const queries = [];
 
-            me.modelList.forEach(function(value) {
-                queries.push(me.checkModelState(value.nm));
-            });
+        me.modelList.forEach(function(value) {
+            queries.push(me.checkModelState(value.nm));
+        });
 
-            return Promise.all(queries).then(function() {
-                return me.modelsToCap;
-            });
+        return Promise.all(queries).then(function() {
+            return me.modelsToCap;
         });
     }
 
